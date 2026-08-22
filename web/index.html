@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Velar Audit — Auditoría de donaciones</title>
+<style>
+  /* Institutional, not crypto. No neon, no gradients, no market candles. */
+  :root {
+    --bg: #f7f8fa;
+    --surface: #ffffff;
+    --border: #dfe3e8;
+    --text: #14181f;
+    --text-muted: #5b6472;
+    --accent: #1c4e80;
+    --verified-bg: #e6f4ea; --verified-fg: #10633a; --verified-br: #9bd3b3;
+    --pending-bg: #fdf3e0;  --pending-fg: #7a4d05;  --pending-br: #e6c079;
+    --violation-bg: #fdeaea; --violation-fg: #8a1c1c; --violation-br: #e8a3a3;
+    --radius: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1319; --surface: #171c24; --border: #2a323d;
+      --text: #e8ecf1; --text-muted: #9aa5b4; --accent: #7aa9d8;
+      --verified-bg: #10291c; --verified-fg: #7fd3a4; --verified-br: #2c5c40;
+      --pending-bg: #2b2110; --pending-fg: #e8bd70; --pending-br: #5e4a1f;
+      --violation-bg: #2c1414; --violation-fg: #f0a0a0; --violation-br: #632a2a;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
+
+  header { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--text-muted); font-size: 13.5px; margin: 0; }
+
+  .wallet {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 14px; font-size: 12.5px; min-width: 300px;
+  }
+  .wallet dt { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px; }
+  .wallet dd { margin: 0 0 8px; font-family: ui-monospace, "SF Mono", Menlo, monospace; word-break: break-all; }
+  .wallet dd:last-child { margin-bottom: 0; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 22px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .tile .label { color: var(--text-muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; }
+  .tile .value { font-size: 26px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+  .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  button {
+    font: inherit; font-size: 13.5px; padding: 8px 14px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { background: var(--violation-bg); border-color: var(--violation-br); color: var(--violation-fg); }
+  button[disabled] { opacity: .5; cursor: not-allowed; }
+  .mode { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+
+  .table-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 860px; }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); font-weight: 600; }
+  tbody tr:last-child td { border-bottom: none; }
+  .num { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: var(--text-muted); }
+
+  /* Status never relies on colour alone — the label carries the meaning. */
+  .pill { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid; white-space: nowrap; }
+  .pill.verified      { background: var(--verified-bg);  color: var(--verified-fg);  border-color: var(--verified-br); }
+  .pill.pending       { background: var(--pending-bg);   color: var(--pending-fg);   border-color: var(--pending-br); }
+  .pill.non_compliant { background: var(--violation-bg); color: var(--violation-fg); border-color: var(--violation-br); }
+  .pill.unscored      { background: var(--bg); color: var(--text-muted); border-color: var(--border); }
+
+  .findings { margin: 6px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--text-muted); }
+  .findings li { margin-top: 3px; }
+  .findings li::before { content: "— "; }
+  .rationale { margin-top: 8px; font-size: 12.5px; font-style: italic; color: var(--text-muted); border-left: 2px solid var(--border); padding-left: 9px; }
+  .engine { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-left: 6px; }
+
+  .anchors { margin: 0; padding: 0; list-style: none; font-size: 11.5px; }
+  .anchors li { font-family: ui-monospace, Menlo, monospace; color: var(--text-muted); white-space: nowrap; }
+  .empty { padding: 44px 20px; text-align: center; color: var(--text-muted); }
+  footer { margin-top: 26px; font-size: 12px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Auditoría de donaciones</h1>
+      <p class="sub">Financiamiento político trazable — evidencia on-chain, datos sensibles fuera de la cadena.</p>
+    </div>
+    <dl class="wallet" id="wallet" aria-label="Billetera del partido"></dl>
+  </header>
+
+  <section class="tiles" id="tiles" aria-label="Resumen"></section>
+
+  <div class="bar">
+    <button class="primary" id="seed">Cargar escenario de demo</button>
+    <button id="refresh">Actualizar</button>
+    <span class="mode" id="mode"></span>
+  </div>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Monto</th>
+          <th scope="col">Origen</th>
+          <th scope="col">Estado</th>
+          <th scope="col">Hallazgos</th>
+          <th scope="col">Evidencia</th>
+          <th scope="col">Recibida</th>
+          <th scope="col"><span class="sr">Acción</span></th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <footer id="policy"></footer>
+</div>
+
+<script type="module">
+const $ = (id) => document.getElementById(id)
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const short = (s) => (s && s.length > 16 ? `${s.slice(0, 10)}…${s.slice(-6)}` : s || '—')
+
+const STATUS_LABEL = {
+  verified: 'Verificada',
+  pending: 'Pendiente',
+  non_compliant: 'No conforme',
+  unscored: 'Sin evaluar',
+}
+
+const fmtMoney = (n) => n.toLocaleString('es-CR', { maximumFractionDigits: 2 })
+const fmtTime = (ms) => new Date(ms).toLocaleString('es-CR', { dateStyle: 'short', timeStyle: 'short' })
+
+async function loadWallet() {
+  const w = await (await fetch('/api/wallet')).json()
+  $('wallet').innerHTML = `
+    <dt>Billetera de donaciones del partido</dt><dd>${esc(w.address)}</dd>
+    <dt>Red</dt><dd>${esc(w.chain)} · ${esc(w.network)} · ${esc(w.token.symbol)}</dd>`
+  $('mode').textContent = w.demoMode
+    ? 'Modo demo — cadena simulada, motor de reglas'
+    : 'Modo real — WDK + QVAC'
+}
+
+function renderTiles(s) {
+  const tiles = [
+    ['Donaciones', s.count],
+    ['Monto total', fmtMoney(s.totalDecimal)],
+    ['Verificadas', s.verified],
+    ['Pendientes', s.pending],
+    ['No conformes', s.non_compliant],
+  ]
+  $('tiles').innerHTML = tiles
+    .map(([label, value]) => `<div class="tile"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div></div>`)
+    .join('')
+}
+
+function renderRow(row) {
+  const { donation: d, attestation: a, verdict: v, returnAction: r, anchors } = row
+  const status = v?.status ?? 'unscored'
+
+  const findings = v?.findings?.length
+    ? `<ul class="findings">${v.findings.map((f) => `<li>${esc(f.message)}</li>`).join('')}</ul>`
+    : '<span class="mono">—</span>'
+
+  const rationale = v?.rationale
+    ? `<p class="rationale">${esc(v.rationale)}</p>`
+    : ''
+
+  const evidence = anchors.length
+    ? `<ul class="anchors">${anchors
+        .map((an) => `<li>${esc(an.kind)} · ${esc(short(an.txRef))}${an.simulated ? ' (sim)' : ''}</li>`)
+        .join('')}</ul>`
+    : '<span class="mono">sin anclar</span>'
+
+  let action = ''
+  if (status === 'non_compliant' && (!r || r.status !== 'returned')) {
+    action = `<button class="danger" data-return="${esc(d.id)}">Devolver</button>`
+  } else if (r?.status === 'returned') {
+    action = `<span class="mono">devuelta<br>${esc(short(r.refundTxRef))}</span>`
+  }
+
+  return `<tr>
+    <td class="num">${fmtMoney(d.amountDecimal)} ${esc(d.asset)}</td>
+    <td>
+      <div>${a ? esc(a.donorCountry) : '<span class="mono">sin atestación</span>'}</div>
+      <div class="mono">${esc(short(d.fromAddress))}</div>
+    </td>
+    <td>
+      <span class="pill ${esc(status)}">${esc(STATUS_LABEL[status])}</span>
+      ${v ? `<span class="engine">${esc(v.engine)}</span>` : ''}
+    </td>
+    <td>${findings}${rationale}</td>
+    <td>${evidence}</td>
+    <td class="mono">${fmtTime(d.receivedAt)}</td>
+    <td>${action}</td>
+  </tr>`
+}
+
+async function load() {
+  const { rows, summary } = await (await fetch('/api/audit')).json()
+  renderTiles(summary)
+
+  $('rows').innerHTML = rows.length
+    ? rows.map(renderRow).join('')
+    : `<tr><td colspan="7" class="empty">Sin donaciones todavía. Cargá el escenario de demo para empezar.</td></tr>`
+
+  $('policy').textContent =
+    `Política aplicada: jurisdicción ${summary.policy.country} · tope por donante USD ${fmtMoney(summary.policy.donorCapUsd)} · ` +
+    `plazo de subsanación ${summary.policy.cureWindowHours} h. El financiamiento político extranjero es ilegal y se marca como no conforme.`
+}
+
+$('rows').addEventListener('click', async (e) => {
+  const id = e.target?.dataset?.return
+  if (!id) return
+  e.target.disabled = true
+  e.target.textContent = 'Devolviendo…'
+  try {
+    await fetch(`/api/donations/${id}/return`, { method: 'POST' })
+  } finally {
+    await load()
+  }
+})
+
+$('seed').addEventListener('click', async () => {
+  $('seed').disabled = true
+  try {
+    await fetch('/api/demo/seed', { method: 'POST' })
+    await load()
+  } finally {
+    $('seed').disabled = false
+  }
+})
+
+$('refresh').addEventListener('click', load)
+
+await loadWallet()
+await load()
+// Keep the table live so a donation sent mid-demo appears on its own.
+setInterval(load, 5000)
+</script>
+</body>
+</html>
