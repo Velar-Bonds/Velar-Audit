@@ -1,0 +1,121 @@
+import { config } from './config.ts'
+import { store } from './store.ts'
+import { assess } from './compliance/qvac-agent.ts'
+import { anchorEvidence } from './evidence/anchor.ts'
+import { getPartyWallet } from './wallet/wdk.ts'
+import type { Attestation, ComplianceVerdict, Donation, ReturnAction } from './types.ts'
+
+/**
+ * The four-step lifecycle, in one place: intake -> evidence -> compliance ->
+ * enforcement. Every transition anchors a hash, so the audit trail is written
+ * as the work happens rather than reconstructed afterwards.
+ */
+
+/** Step 1 + 3: a donation landed. Score it with whatever evidence exists now. */
+export async function onDonation(donation: Donation): Promise<ComplianceVerdict> {
+  const verdict = await scoreDonation(donation.id)
+  return verdict
+}
+
+/** Step 2: the KYC provider issued an attestation. Store, anchor, re-score. */
+export async function onAttestation(attestation: Attestation): Promise<ComplianceVerdict> {
+  store.putAttestation(attestation)
+  await anchorEvidence('attestation', attestation.donationId, attestation.hash)
+  return scoreDonation(attestation.donationId)
+}
+
+/** Step 3: run the compliance agent and anchor the verdict. */
+export async function scoreDonation(donationId: string): Promise<ComplianceVerdict> {
+  const donation = store.donation(donationId)
+  if (!donation) throw new Error(`unknown donation ${donationId}`)
+
+  const verdict = await assess({
+    donation,
+    attestation: store.attestationFor(donationId),
+    now: Date.now(),
+  })
+
+  store.putVerdict(verdict)
+  await anchorEvidence('verdict', donationId, {
+    status: verdict.status,
+    findings: verdict.findings.map((f) => f.code),
+    engine: verdict.engine,
+    evaluatedAt: verdict.evaluatedAt,
+  })
+
+  if (verdict.status === 'non_compliant') flagForReturn(donation, verdict)
+  return verdict
+}
+
+/** Step 4: a non-compliant donation must go back to where it came from. */
+export function flagForReturn(donation: Donation, verdict: ComplianceVerdict): ReturnAction {
+  const existing = store.returnFor(donation.id)
+  if (existing && existing.status === 'returned') return existing
+
+  const violations = verdict.findings.filter((f) => f.severity === 'violation')
+  return store.putReturn({
+    donationId: donation.id,
+    status: 'flagged',
+    reason: violations.map((f) => f.message).join(' '),
+    flaggedAt: Date.now(),
+    dueBy: Date.now() + config.compliance.cureWindowMs,
+    executedAt: null,
+    refundTxRef: null,
+  })
+}
+
+/** Execute the return. The wallet policy permits this only back to the donor. */
+export async function executeReturn(donationId: string): Promise<ReturnAction> {
+  const donation = store.donation(donationId)
+  if (!donation) throw new Error(`unknown donation ${donationId}`)
+
+  const flagged = store.returnFor(donationId)
+  if (!flagged) throw new Error(`donation ${donationId} is not flagged for return`)
+  if (flagged.status === 'returned') return flagged
+
+  const wallet = await getPartyWallet()
+  const { hash } = await wallet.refund(donation.fromAddress, BigInt(donation.amountRaw))
+
+  const done = store.putReturn({
+    ...flagged,
+    status: 'returned',
+    executedAt: Date.now(),
+    refundTxRef: hash,
+  })
+
+  await anchorEvidence('return', donationId, {
+    donationTxHash: donation.txHash,
+    refundTxRef: hash,
+    reason: done.reason,
+    executedAt: done.executedAt,
+  })
+
+  console.log(`[return] ${donation.amountDecimal} ${donation.asset} returned to ${donation.fromAddress}`)
+  return done
+}
+
+/**
+ * Escalate anything that sat in `pending` past its cure window. Runs on a timer
+ * so a donation cannot quietly age out of scrutiny.
+ */
+export async function sweepOverdue(): Promise<number> {
+  const now = Date.now()
+  let escalated = 0
+
+  for (const donation of store.donations()) {
+    const verdict = store.verdictFor(donation.id)
+    if (!verdict || verdict.status !== 'pending') continue
+    if (verdict.cureDeadline === null || now < verdict.cureDeadline) continue
+
+    await scoreDonation(donation.id)
+    escalated++
+  }
+
+  for (const ret of store.returns()) {
+    if (ret.status === 'flagged' && now > ret.dueBy) {
+      store.putReturn({ ...ret, status: 'overdue' })
+    }
+  }
+
+  return escalated
+}
