@@ -1,8 +1,8 @@
-import { config } from '../config.ts'
-import { store } from '../store.ts'
-import { getPartyWallet } from '../wallet/wdk.ts'
-import { hashPayload, newId } from '../attestation/hash.ts'
-import type { EvidenceAnchor, EvidenceKind } from '../types.ts'
+import { config } from '../config.js'
+import { store } from '../store.js'
+import { getPartyWallet } from '../wallet/wdk.js'
+import { hashPayload, newId } from '../attestation/hash.js'
+import type { EvidenceAnchor, EvidenceKind } from '../types.js'
 
 /**
  * On-chain evidence: hash + timestamp + tx ref.

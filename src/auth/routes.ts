@@ -1,8 +1,8 @@
 import { Router } from 'express'
-import { authStore } from './store.ts'
-import { verifyPassword } from './passwords.ts'
-import { SESSION_COOKIE, requireAuth, toSafeUser, tokenFrom } from './middleware.ts'
-import type { AuthedRequest } from './middleware.ts'
+import { authStore } from './store.js'
+import { verifyPassword } from './passwords.js'
+import { SESSION_COOKIE, requireAuth, toSafeUser, tokenFrom } from './middleware.js'
+import type { AuthedRequest } from './middleware.js'
 
 export const authRouter = Router()
 

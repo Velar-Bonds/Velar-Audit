@@ -1,8 +1,8 @@
-import { store } from './store.ts'
-import { authStore } from './auth/store.ts'
-import { hashPassword } from './auth/passwords.ts'
-import { newId } from './attestation/hash.ts'
-import type { Party } from './types.ts'
+import { store } from './store.js'
+import { authStore } from './auth/store.js'
+import { hashPassword } from './auth/passwords.js'
+import { newId } from './attestation/hash.js'
+import type { Party } from './types.js'
 
 /**
  * Parties and accounts for the demo.

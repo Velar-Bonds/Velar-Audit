@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express'
-import { authStore } from './store.ts'
-import { store } from '../store.ts'
-import type { Role, SafeUser, User } from '../types.ts'
+import { authStore } from './store.js'
+import { store } from '../store.js'
+import type { Role, SafeUser, User } from '../types.js'
 
 export const SESSION_COOKIE = 'velar_session'
 

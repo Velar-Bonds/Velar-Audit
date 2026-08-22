@@ -1,4 +1,4 @@
-import { config } from '../config.ts'
+import { config } from '../config.js'
 
 /**
  * Party donation wallets, built on Tether's WDK.

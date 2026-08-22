@@ -4,9 +4,11 @@
  * Run this the moment you sit down. Pulling a model over venue wifi during the
  * demo is how a working project looks broken.
  */
-import { config } from '../config.ts'
+import { config } from '../config.js'
 
-const sdk: any = await import('@qvac/sdk')
+// Same reason as in qvac-agent.ts: the module is optional at build time.
+const QVAC_MODULE = '@qvac/sdk'
+const sdk: any = await import(QVAC_MODULE)
 const modelSrc = sdk[config.qvac.model]
 
 if (!modelSrc) {

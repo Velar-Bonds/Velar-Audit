@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { dirname } from 'node:path'
-import type { Session, User } from '../types.ts'
+import type { Session, User } from '../types.js'
 
 /**
  * Credentials live in their own file, apart from the donation ledger. Different
@@ -30,9 +30,18 @@ function load(): AuthDb {
 
 let db = load()
 
+/** Best-effort, for the same reason as the donation store. */
+let writable = true
+
 function persist(): void {
-  mkdirSync(dirname(DB_PATH), { recursive: true })
-  writeFileSync(DB_PATH, JSON.stringify(db, null, 2), { mode: 0o600 })
+  if (!writable) return
+  try {
+    mkdirSync(dirname(DB_PATH), { recursive: true })
+    writeFileSync(DB_PATH, JSON.stringify(db, null, 2), { mode: 0o600 })
+  } catch {
+    writable = false
+    console.warn('[auth] filesystem is read-only; sessions live in memory only')
+  }
 }
 
 /**

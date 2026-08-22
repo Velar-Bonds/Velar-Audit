@@ -1,8 +1,8 @@
-import { config } from '../config.ts'
-import { newId } from '../attestation/hash.ts'
-import { getPartyWallet, registerDonorAddress } from './wdk.ts'
-import { store } from '../store.ts'
-import type { AssetSymbol, Donation } from '../types.ts'
+import { config } from '../config.js'
+import { newId } from '../attestation/hash.js'
+import { getPartyWallet, registerDonorAddress } from './wdk.js'
+import { store } from '../store.js'
+import type { AssetSymbol, Donation } from '../types.js'
 
 /**
  * Watches the party's donation wallet for incoming transfers.

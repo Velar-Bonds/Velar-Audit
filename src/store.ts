@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type {
   Donation, Attestation, ComplianceVerdict, ReturnAction, EvidenceAnchor, AuditRow, Party,
-} from './types.ts'
+} from './types.js'
 
 const DB_PATH = './data/velar-audit.json'
 
@@ -33,9 +33,25 @@ function load(): Db {
 
 let db = load()
 
+/**
+ * Persistence is best-effort.
+ *
+ * On a serverless host the filesystem is read-only and every write throws. That
+ * is not a failure worth crashing over: the store already holds everything in
+ * memory, so we simply stop trying and carry on. The consequence — state does
+ * not survive a cold start — is handled by seeding on boot.
+ */
+let writable = true
+
 function persist(): void {
-  mkdirSync(dirname(DB_PATH), { recursive: true })
-  writeFileSync(DB_PATH, JSON.stringify(db, null, 2))
+  if (!writable) return
+  try {
+    mkdirSync(dirname(DB_PATH), { recursive: true })
+    writeFileSync(DB_PATH, JSON.stringify(db, null, 2))
+  } catch {
+    writable = false
+    console.warn('[store] filesystem is read-only; keeping state in memory only')
+  }
 }
 
 export const store = {

@@ -1,10 +1,10 @@
-import { config } from './config.ts'
-import { store } from './store.ts'
-import { assess } from './compliance/qvac-agent.ts'
-import { evaluate } from './compliance/rules.ts'
-import { anchorEvidence } from './evidence/anchor.ts'
-import { getPartyWallet } from './wallet/wdk.ts'
-import type { Attestation, ComplianceVerdict, Donation, ReturnAction } from './types.ts'
+import { config } from './config.js'
+import { store } from './store.js'
+import { assess } from './compliance/qvac-agent.js'
+import { evaluate } from './compliance/rules.js'
+import { anchorEvidence } from './evidence/anchor.js'
+import { getPartyWallet } from './wallet/wdk.js'
+import type { Attestation, ComplianceVerdict, Donation, ReturnAction } from './types.js'
 
 /**
  * The four-step lifecycle, in one place: intake -> evidence -> compliance ->

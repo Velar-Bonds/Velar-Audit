@@ -1,9 +1,9 @@
-import { config } from '../config.ts'
-import { store } from '../store.ts'
-import { verifyAttestation } from '../attestation/stub-provider.ts'
+import { config } from '../config.js'
+import { store } from '../store.js'
+import { verifyAttestation } from '../attestation/stub-provider.js'
 import type {
   Attestation, ComplianceFinding, ComplianceStatus, ComplianceVerdict, Donation,
-} from '../types.ts'
+} from '../types.js'
 
 /**
  * Deterministic compliance rules for political donations.

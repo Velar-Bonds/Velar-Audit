@@ -3,7 +3,7 @@
  * update live during the demo:
  *   npm run donate:sim -- 2500 0xdeadbeef…
  */
-import { config } from '../config.ts'
+import { config } from '../config.js'
 
 const amountDecimal = Number(process.argv[2] ?? 1000)
 const fromAddress = process.argv[3] ?? `0x${'d0n0r'.padEnd(40, '0')}`

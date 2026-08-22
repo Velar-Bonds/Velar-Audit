@@ -1,8 +1,8 @@
-import { store } from './store.ts'
-import { injectDonation } from './wallet/indexer.ts'
-import { issueAttestation } from './attestation/stub-provider.ts'
-import { onDonation, onAttestation } from './pipeline.ts'
-import type { CountryCode, SourceOfFunds } from './types.ts'
+import { store } from './store.js'
+import { injectDonation } from './wallet/indexer.js'
+import { issueAttestation } from './attestation/stub-provider.js'
+import { onDonation, onAttestation } from './pipeline.js'
+import type { CountryCode, SourceOfFunds } from './types.js'
 
 /**
  * The demo scenario.

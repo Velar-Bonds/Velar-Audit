@@ -1,9 +1,9 @@
-import { config } from '../config.ts'
-import { evaluateRules, statusFrom } from './rules.ts'
-import type { RuleContext } from './rules.ts'
+import { config } from '../config.js'
+import { evaluateRules, statusFrom } from './rules.js'
+import type { RuleContext } from './rules.js'
 import type {
   Attestation, ComplianceFinding, ComplianceStatus, ComplianceVerdict, Donation,
-} from '../types.ts'
+} from '../types.js'
 
 /**
  * QVAC compliance agent — runs a language model ON THIS MACHINE.
@@ -81,6 +81,8 @@ FINDINGS:
   },
 ]
 
+const QVAC_MODULE = '@qvac/sdk'
+
 let modelIdPromise: Promise<string | null> | null = null
 let sdk: any = null
 
@@ -92,7 +94,11 @@ async function getModelId(): Promise<string | null> {
   modelIdPromise ??= (async () => {
     if (config.demoMode) return null
     try {
-      sdk = await import('@qvac/sdk')
+      // Specifier held in a variable on purpose: '@qvac/sdk' is a genuinely
+      // optional dependency — a 4.7 GB local-inference runtime that cannot be
+      // installed everywhere this server runs — and a literal import would make
+      // the type checker demand it be present at build time.
+      sdk = await import(/* @vite-ignore */ QVAC_MODULE)
 
       const modelSrc = sdk[config.qvac.model]
       if (!modelSrc) {

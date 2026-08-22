@@ -10,6 +10,7 @@ const state = {
   wallets: null,
   filters: { q: '', status: 'all', asset: 'all', page: 1 },
   drawer: null,
+  modal: null,
   poll: null,
 }
 
@@ -92,6 +93,44 @@ async function refresh() {
 
 /* ══ Sign in ═══════════════════════════════════════════════════════════════ */
 
+/**
+ * Abstract block-network illustration for the sign-in panel.
+ *
+ * Generated rather than shipped as an image: a few hundred bytes of SVG instead
+ * of a PNG, crisp at any size, and it keeps the promise that nothing in this
+ * interface is fetched from anywhere else.
+ */
+function networkMesh() {
+  // Fixed seed so the artwork is identical on every load. A login screen that
+  // reshuffles itself looks like a rendering bug.
+  let seed = 20260822
+  const rand = () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296)
+
+  // Radii stay small: preserveAspectRatio="slice" magnifies the viewBox, and
+  // at r=3 the nodes render as blobs rather than as points in a network.
+  const nodes = Array.from({ length: 44 }, () => ({
+    x: Math.round(rand() * 100),
+    y: Math.round(rand() * 100),
+    r: 0.35 + rand() * 0.65,
+  }))
+
+  const links = []
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      if (Math.hypot(nodes[i].x - nodes[j].x, nodes[i].y - nodes[j].y) < 19) {
+        links.push([nodes[i], nodes[j]])
+      }
+    }
+  }
+
+  return `<svg class="mesh" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    ${links.map(([a, b]) =>
+      `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#3E6FA8" stroke-width="0.12"/>`).join('')}
+    ${nodes.map((n) =>
+      `<circle cx="${n.x}" cy="${n.y}" r="${n.r.toFixed(2)}" fill="#5B8FCC" opacity="0.75"/>`).join('')}
+  </svg>`
+}
+
 const DEMO_ACCOUNTS = [
   ['tse@velar.cr', 'Electoral tribunal'],
   ['alfa@velar.cr', 'Alfa Party'],
@@ -104,57 +143,75 @@ function renderLogin(error = '') {
   state.me = null
 
   root.innerHTML = `
-  <div class="auth-screen">
-    <form class="auth-card" id="loginForm" novalidate>
-      <div class="auth-brand">
+  <div class="auth-split">
+    <aside class="auth-art">
+      ${networkMesh()}
+      <div style="position:relative;display:flex;align-items:center;gap:12px">
         <span class="brand-mark">V</span>
-        <div>
-          <div class="brand-name">Velar Audit</div>
-          <div class="body-s secondary">Donation auditability</div>
-        </div>
+        <span>
+          <span class="brand-name">Velar Audit</span><br>
+          <span class="brand-sub">Supreme Electoral Tribunal of Costa Rica</span>
+        </span>
       </div>
 
-      <div class="block">
+      <div class="pitch" style="position:relative">
+        <h2>Political financing you can check, not just trust.</h2>
+        <p>Every donation is traceable from the moment it arrives. The evidence is public;
+          the identity of the person who donated is not.</p>
+      </div>
+
+      <div style="position:relative;font-size:12.5px;color:#93AECD">
+        Evidence anchored on-chain · personal data never leaves the provider
+      </div>
+    </aside>
+
+    <div class="auth-form-side">
+      <form class="auth-form" id="loginForm" novalidate>
         ${error ? `
         <div class="error-summary" role="alert" tabindex="-1" id="errorSummary">
           <h2>There is a problem</h2>
           <p>${esc(error)}</p>
         </div>` : ''}
 
-        <h1 class="heading-l">Sign in</h1>
-        <p class="secondary body-s" style="margin:4px 0 24px">
-          Use the institutional account your organisation issued you.</p>
+        <h1 class="heading-l">Welcome back</h1>
+        <p class="lede">Sign in to the audit platform.</p>
 
         <div class="field${error ? ' has-error' : ''}">
-          <label for="email">Email address</label>
+          <label for="email">Institutional email address</label>
           <input class="input" type="email" id="email" autocomplete="username" required>
         </div>
 
         <div class="field${error ? ' has-error' : ''}">
-          <label for="password">Password</label>
+          <div class="field-row">
+            <label for="password">Password</label>
+            <button type="button" class="btn-link body-s" id="forgot">Forgot your password?</button>
+          </div>
           <input class="input" type="password" id="password" autocomplete="current-password" required>
         </div>
 
         <button class="btn btn-full" type="submit" id="loginBtn">Sign in</button>
 
-        <hr class="rule" style="margin:24px 0 20px">
+        <p class="body-s" style="margin-top:16px;text-align:center;color:var(--text-2)">
+          No account yet?
+          <button type="button" class="btn-link" id="goSignup">Request access</button>
+        </p>
+
+        <hr class="rule" style="margin:24px 0 16px">
 
         <h2 class="heading-s">Demonstration accounts</h2>
         <p class="body-s secondary" style="margin:2px 0 12px">
           All three use the password <span class="mono">velar-demo-2026</span>.</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           ${DEMO_ACCOUNTS.map(([email, label]) =>
-            `<button type="button" class="btn secondary sm"
-              data-email="${esc(email)}">${esc(label)}</button>`).join('')}
+            `<button type="button" class="btn secondary sm" data-email="${esc(email)}">${esc(label)}</button>`).join('')}
         </div>
 
-        <hr class="rule" style="margin:24px 0 16px">
-        <p class="body-s">
+        <p class="body-s" style="margin-top:20px;color:var(--text-2)">
           Want to donate to a party?
           <button type="button" class="btn-link" id="goDonate">You do not need an account</button>.
         </p>
-      </div>
-    </form>
+      </form>
+    </div>
   </div>`
 
   root.querySelector('#errorSummary')?.focus()
@@ -171,6 +228,11 @@ function renderLogin(error = '') {
     location.hash = '#/donate'
     renderDonate()
   })
+
+  root.querySelector('#goSignup')?.addEventListener('click', () => renderSignup())
+
+  root.querySelector('#forgot')?.addEventListener('click', () =>
+    toast('Password resets are handled by your organisation administrator.'))
 
   root.querySelector('#loginForm').addEventListener('submit', async (e) => {
     e.preventDefault()
@@ -196,6 +258,121 @@ function renderLogin(error = '') {
   })
 }
 
+/* ══ Request access ════════════════════════════════════════════════════════ */
+
+/**
+ * Credential request form.
+ *
+ * It does not create an account. On a platform that supervises political
+ * financing, accounts are issued after a person's institution has been
+ * verified, so this collects a request and says plainly that a human will
+ * review it — a signup that silently granted access would be the wrong
+ * promise to make here.
+ */
+function renderSignup(error = '') {
+  clearInterval(state.poll)
+  state.poll = null
+
+  root.innerHTML = `
+  <div class="auth-split">
+    <aside class="auth-art">
+      ${networkMesh()}
+      <div style="position:relative;display:flex;align-items:center;gap:12px">
+        <span class="brand-mark">V</span>
+        <span>
+          <span class="brand-name">Velar Audit</span><br>
+          <span class="brand-sub">Supreme Electoral Tribunal of Costa Rica</span>
+        </span>
+      </div>
+
+      <div class="pitch" style="position:relative">
+        <h2>Access is granted to verified institutions.</h2>
+        <p>Requests are reviewed by the electoral tribunal before credentials are issued.
+          Tell us who you are and why you need access.</p>
+      </div>
+
+      <div style="position:relative;font-size:12.5px;color:#93AECD">
+        Every account is tied to a registered institution or political party
+      </div>
+    </aside>
+
+    <div class="auth-form-side">
+      <form class="auth-form" id="signupForm" novalidate>
+        ${error ? `
+        <div class="error-summary" role="alert" tabindex="-1" id="errorSummary">
+          <h2>There is a problem</h2>
+          <p>${esc(error)}</p>
+        </div>` : ''}
+
+        <h1 class="heading-l">Request credentials</h1>
+        <p class="lede">Complete these details so your organisation can be verified.</p>
+
+        <div class="field">
+          <label for="fullName">Full name</label>
+          <input class="input" type="text" id="fullName" autocomplete="name" required>
+        </div>
+
+        <div class="field">
+          <label for="role">Position held</label>
+          <input class="input" type="text" id="role" autocomplete="organization-title" required>
+        </div>
+
+        <div class="field">
+          <label for="org">Institution or political party</label>
+          <input class="input" type="text" id="org" autocomplete="organization" required>
+        </div>
+
+        <div class="field">
+          <label for="officialEmail">Official email address</label>
+          <p class="hint">An institutional domain is preferred over a personal one.</p>
+          <input class="input" type="email" id="officialEmail" autocomplete="email" required>
+        </div>
+
+        <div class="field">
+          <label for="reason">Reason for the request</label>
+          <textarea class="input" id="reason" rows="4" required></textarea>
+        </div>
+
+        <div class="field">
+          <label class="checkbox">
+            <input type="checkbox" id="terms" required>
+            <span>I accept the terms of use and the privacy policy, and I confirm the details
+              above are accurate.</span>
+          </label>
+        </div>
+
+        <button class="btn btn-full" type="submit" id="signupBtn">Send access request</button>
+
+        <p class="body-s" style="margin-top:16px;text-align:center;color:var(--text-2)">
+          Already have credentials?
+          <button type="button" class="btn-link" id="backToLogin">Sign in</button>
+        </p>
+      </form>
+    </div>
+  </div>`
+
+  root.querySelector('#errorSummary')?.focus()
+  root.querySelector('#backToLogin').addEventListener('click', () => renderLogin())
+
+  root.querySelector('#signupForm').addEventListener('submit', (e) => {
+    e.preventDefault()
+    const value = (id) => root.querySelector(`#${id}`).value.trim()
+
+    if (!value('fullName') || !value('org') || !value('officialEmail')) {
+      return renderSignup('Enter your name, your organisation and an official email address.')
+    }
+    if (!root.querySelector('#terms').checked) {
+      return renderSignup('You must accept the terms of use to submit a request.')
+    }
+
+    // Deliberately not wired to an endpoint: issuing credentials for a system
+    // that supervises political parties is a decision for the tribunal, not a
+    // form submission, and pretending otherwise would misrepresent the product.
+    renderLogin()
+    toast('Request recorded. The electoral tribunal reviews each one before issuing credentials.')
+  })
+}
+
 /* ══ Public donation page ══════════════════════════════════════════════════ */
 
 /**
@@ -213,7 +390,7 @@ async function renderDonate() {
   try {
     data = await (await fetch('/api/public/parties')).json()
   } catch {
-    root.innerHTML = '<div class="auth-screen"><p>Could not load this page.</p></div>'
+    root.innerHTML = '<div class="auth-form-side"><p>Could not load this page.</p></div>'
     return
   }
 
@@ -222,22 +399,18 @@ async function renderDonate() {
   root.innerHTML = `
   <a href="#main" class="skip-link">Skip to main content</a>
 
-  <div class="navbar">
-    <div class="navbar-inner">
-      <button class="brand-link" data-goto-login aria-label="Velar Audit">
-        <span class="brand-mark">V</span>
-        <span>
-          <span class="brand-name">Velar Audit</span><br>
-          <span class="brand-sub">Supreme Electoral Tribunal of Costa Rica</span>
-        </span>
-      </button>
-      <div class="navbar-right">
-        <button class="btn secondary sm" data-goto-login>Institutional sign in</button>
-      </div>
+  <div class="topbar" style="padding-left:24px;padding-right:24px">
+    <button class="brand-link" data-goto-login aria-label="Velar Audit"
+      style="display:flex;align-items:center;gap:12px;background:none;border:none;cursor:pointer">
+      <span class="brand-mark">V</span>
+      <span class="brand-name">VELAR-AUDIT</span>
+    </button>
+    <div class="profile">
+      <button class="btn secondary sm" data-goto-login>Institutional sign in</button>
     </div>
   </div>
 
-  <main id="main" class="content" style="max-width:1100px">
+  <main id="main" class="content" style="max-width:1080px">
     <div class="view-head">
       <span class="caption">Donations</span>
       <h1 class="heading-xl">Donate to a political party</h1>
@@ -260,10 +433,9 @@ async function renderDonate() {
           <h2 class="heading-l" style="margin-bottom:16px">${esc(party.name)}</h2>
 
           <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
-            <img src="/api/public/qr/${esc(party.id)}.svg" width="150" height="150"
+            <img src="/api/public/qr/${esc(party.id)}.svg" width="140" height="140"
               alt="QR code holding the donation address for ${esc(party.name)}"
               style="border:1px solid var(--border);border-radius:8px;background:#fff">
-
             <div style="flex:1;min-width:15em">
               <p class="body-s secondary" style="margin-bottom:8px">
                 Scan it with a mobile wallet, or copy the address.</p>
@@ -305,12 +477,7 @@ async function renderDonate() {
         back to the address it came from.</p>
       </div>
     </div>
-  </main>
-
-  <div class="content body-s secondary" style="max-width:1100px;padding-top:0">
-    <p>Velar Audit — donation auditability for political financing. Donors' personal data is
-      stored neither in this system nor on the blockchain.</p>
-  </div>`
+  </main>`
 
   root.querySelectorAll('[data-goto-login]').forEach((el) =>
     el.addEventListener('click', () => { location.hash = ''; renderLogin() }))
@@ -333,9 +500,11 @@ const NAV = [
   { route: 'donations', label: 'Donations', count: () => state.summary?.count },
   { route: 'compliance', label: 'Compliance', count: () => attentionRows().length },
   { route: 'wallets', label: 'Wallets', count: () => state.wallets?.wallets.length },
-  // Only the tribunal gets the audit surface; a party inspecting itself is not
-  // an audit, and the view exists to be read by someone other than the audited.
-  { route: 'audit', label: 'Audit view', tseOnly: true },
+  { route: 'audit', label: 'Audit trail' },
+  // Only the tribunal gets the public audit surface: a party inspecting itself
+  // is not an audit, and the view exists to be read by someone other than the
+  // party being audited.
+  { route: 'tse', label: 'TSE audit view', tseOnly: true },
 ]
 
 const CRUMBS = {
@@ -344,7 +513,8 @@ const CRUMBS = {
   detail: [['Donations', 'donations'], ['Donation detail', null]],
   compliance: [['Compliance', null]],
   wallets: [['Wallets', null]],
-  audit: [['Audit view', null]],
+  audit: [['Audit trail', null]],
+  tse: [['TSE audit view', null]],
 }
 
 function renderShell(view, body) {
@@ -356,73 +526,74 @@ function renderShell(view, body) {
   root.innerHTML = `
   <a href="#main" class="skip-link">Skip to main content</a>
 
-  <div class="navbar">
-    <div class="navbar-inner">
-      <button class="brand-link" data-route="dashboard" aria-label="Velar Audit, go to overview">
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
         <span class="brand-mark">V</span>
-        <span>
-          <span class="brand-name">Velar Audit</span><br>
-          <span class="brand-sub">Supreme Electoral Tribunal of Costa Rica</span>
-        </span>
-      </button>
+        <span class="brand-name">VELAR-AUDIT</span>
+      </div>
 
-      <div class="navbar-right">
-        <span class="navbar-env">
+      <nav class="nav" aria-label="Main menu">
+        ${NAV.filter((item) => !item.tseOnly || me.role === 'tse').map((item) => {
+          const active = view === item.route || (view === 'detail' && item.route === 'donations')
+          const count = item.count?.()
+          return `<button class="nav-item" data-route="${item.route}"
+            ${active ? 'aria-current="page"' : ''}>
+            <span>${item.label}</span>
+            ${count != null ? `<span class="nav-count">${count}</span>` : ''}
+          </button>`
+        }).join('')}
+      </nav>
+
+      <div class="sidebar-foot">
+        <ul class="swatches">
+          <li><span class="chip" style="background:var(--brand)"></span>Primary Blue</li>
+          <li><span class="chip" style="background:var(--navy)"></span>Navy Blue</li>
+        </ul>
+        <span class="env-pill">
           <span class="dot ${state.wallets?.demoMode ? '' : 'live'}"
-            ${state.wallets?.demoMode ? 'style="background:var(--blue-300)"' : ''}></span>
-          ${state.wallets?.demoMode ? 'Demonstration mode' : 'Live — WDK and local analysis'}
+            ${state.wallets?.demoMode ? 'style="background:var(--text-3)"' : ''}></span>
+          ${state.wallets?.demoMode ? 'Demonstration mode' : 'Live — WDK'}
         </span>
-        <span class="navbar-user">
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <ol>
+            <li><button data-route="dashboard">VELAR-AUDIT</button></li>
+            ${crumbs.map(([label, route]) =>
+              `<li>${route
+                ? `<button data-route="${route}">${esc(label)}</button>`
+                : `<span aria-current="page">${esc(label)}</span>`}</li>`).join('')}
+          </ol>
+        </nav>
+
+        <div class="profile">
           <span class="who">
             ${esc(me.email)}<br>
             <span class="org">${esc(org)}</span>
           </span>
           <span class="avatar" aria-hidden="true">${esc(initials)}</span>
-        </span>
-        <button class="btn secondary sm" id="logout">Sign out</button>
+          <button class="btn secondary sm" id="logout">Sign out</button>
+        </div>
+      </header>
+
+      <div class="phase-banner">
+        <strong class="tag returned">Beta</strong>
+        <span>A service being built for the Supreme Electoral Tribunal of Costa Rica.
+          ${state.wallets?.demoMode
+            ? 'It is currently running against a simulated chain.'
+            : 'Connected to the test network, with local analysis.'}</span>
       </div>
+
+      <main id="main" class="content">${body}</main>
     </div>
   </div>
 
-  <nav class="section-nav" aria-label="Sections">
-    <div class="inner">
-      ${NAV.filter((item) => !item.tseOnly || me.role === 'tse').map((item) => {
-        const active = view === item.route || (view === 'detail' && item.route === 'donations')
-        const count = item.count?.()
-        return `<button class="nav-item" data-route="${item.route}"
-          ${active ? 'aria-current="page"' : ''}>
-          <span>${item.label}</span>
-          ${count != null ? `<span class="nav-count">${count}</span>` : ''}
-        </button>`
-      }).join('')}
-    </div>
-  </nav>
-
-  <div class="shell">
-    <header class="topbar">
-      <nav class="breadcrumbs" aria-label="Breadcrumb">
-        <ol>
-          <li><button data-route="dashboard">Home</button></li>
-          ${crumbs.map(([label, route]) =>
-            `<li>${route
-              ? `<button data-route="${route}">${esc(label)}</button>`
-              : `<span aria-current="page">${esc(label)}</span>`}</li>`).join('')}
-        </ol>
-      </nav>
-    </header>
-
-    <div class="phase-banner">
-      <strong class="tag returned">Beta</strong>
-      <span>A service being built for the Supreme Electoral Tribunal of Costa Rica.
-        ${state.wallets?.demoMode
-          ? 'It is currently running against a simulated chain.'
-          : 'Connected to the test network, with local analysis.'}</span>
-    </div>
-
-    <main id="main" class="content">${body}</main>
-  </div>
-
-  ${state.drawer ? renderDrawer(state.drawer) : ''}`
+  ${state.drawer ? renderDrawer(state.drawer) : ''}
+  ${state.modal ? renderReturnModal(state.modal) : ''}`
 
   root.querySelector('#logout').addEventListener('click', async () => {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' })
@@ -1000,6 +1171,101 @@ function renderDrawer(id) {
   </aside>`
 }
 
+/* ══ Return modal ══════════════════════════════════════════════════════════ */
+
+const RETURN_STEPS = [
+  'Preparing transaction',
+  'Transaction submitted',
+  'Evidence anchored',
+  'Return completed',
+]
+
+/**
+ * Confirmation before money moves back.
+ *
+ * Returning a donation is irreversible and politically consequential, so it
+ * gets a deliberate confirmation showing exactly what will be sent and where —
+ * not a button that fires on the first click.
+ */
+function renderReturnModal({ id, step = -1, running = false }) {
+  const row = state.rows.find((r) => r.donation.id === id)
+  if (!row) return ''
+
+  const { donation: d, verdict: v } = row
+  const reason = (v?.findings ?? []).find((f) => f.severity === 'violation')?.message
+    ?? 'Flagged as non-compliant.'
+
+  return `
+  <div class="modal-scrim" data-close-modal>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"
+         onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <h2 class="heading-m" id="modalTitle">Return donation</h2>
+          <p class="body-s secondary">${esc(refOf(d.id))} ·
+            ${esc(state.parties[d.partyId] ?? '')}</p>
+        </div>
+        <button class="btn-link" data-close-modal ${running ? 'disabled' : ''}>Close</button>
+      </div>
+
+      <div class="modal-body">
+        ${summaryList([
+          ['Received amount', `${money2(d.amountDecimal)} ${esc(d.asset)}`],
+          ['Return address', `<span class="mono">${esc(shortHash(d.fromAddress))}</span>`],
+          ['Reason', esc(reason)],
+        ])}
+
+        <label class="checkbox" style="margin-top:20px">
+          <input type="checkbox" id="anchorEvidence" checked disabled>
+          <span>Create immutable return evidence.
+            <span class="secondary">Always on: a return without anchored evidence would
+            leave no proof the money went back.</span></span>
+        </label>
+
+        <ol class="steps">
+          ${RETURN_STEPS.map((label, i) => `
+            <li class="${i < step ? 'done' : i === step ? 'active' : ''}">${label}</li>`).join('')}
+        </ol>
+      </div>
+
+      <div class="modal-foot">
+        <button class="btn secondary" data-close-modal ${running ? 'disabled' : ''}>Cancel</button>
+        <button class="btn warning" id="confirmReturn" ${running ? 'disabled' : ''}>
+          ${running ? 'Returning…' : 'Return donation'}</button>
+      </div>
+    </div>
+  </div>`
+}
+
+/**
+ * Walk the modal through its steps while the return actually runs.
+ *
+ * The steps are shown as the work happens, not animated ahead of it: a progress
+ * indicator that finishes before the transaction does teaches people to
+ * distrust it.
+ */
+async function runReturn(id) {
+  const advance = (step, running = true) => { state.modal = { id, step, running }; render() }
+
+  advance(0)
+  try {
+    advance(1)
+    await api(`/api/donations/${id}/return`, { method: 'POST' })
+    advance(2)
+    await refresh()
+    advance(3)
+    await new Promise((r) => setTimeout(r, 400))
+    state.modal = null
+    state.drawer = null
+    render()
+    toast('Donation returned. The evidence has been anchored on the chain.')
+  } catch (err) {
+    state.modal = null
+    render()
+    toast(err.message)
+  }
+}
+
 /* ══ Wallets ═══════════════════════════════════════════════════════════════ */
 
 const PRIVATE_ITEMS = [
@@ -1101,6 +1367,135 @@ function viewWallets() {
   </div>`
 }
 
+/* ══ Audit trail ═══════════════════════════════════════════════════════════ */
+
+/**
+ * Every compliance action, in chronological order.
+ *
+ * Assembled from the same records the rest of the product reads rather than
+ * from a separate log table: a log that can drift from the thing it describes
+ * is worse than no log, because it invites you to trust the wrong one.
+ */
+function trailEvents() {
+  const events = []
+
+  for (const row of state.rows) {
+    const { donation: d, attestation: a, verdict: v, returnAction: r, anchors } = row
+    const ref = refOf(d.id)
+    const anchorFor = (kind) => anchors.find((x) => x.kind === kind)
+
+    events.push({
+      at: d.receivedAt, kind: 'received', action: 'Donation received', ref,
+      hash: d.txHash, actor: 'Chain indexer',
+    })
+
+    if (a) {
+      events.push({
+        at: a.issuedAt, kind: 'attestation', action: 'Attestation linked', ref,
+        hash: anchorFor('attestation')?.subjectHash ?? a.hash, actor: a.providerId,
+      })
+    }
+
+    if (v) {
+      const flagged = v.status === 'non_compliant'
+      events.push({
+        at: v.evaluatedAt,
+        kind: flagged ? 'flagged' : 'verified',
+        action: flagged ? 'Donation flagged' : 'Compliance verified',
+        ref,
+        hash: anchors.filter((x) => x.kind === 'verdict').at(-1)?.subjectHash ?? '—',
+        actor: v.engine === 'qvac' ? 'QVAC node (local)' : 'Rules engine',
+      })
+    }
+
+    if (r?.status === 'returned' && r.executedAt) {
+      events.push({
+        at: r.executedAt, kind: 'returned', action: 'Return completed', ref,
+        hash: anchorFor('return')?.subjectHash ?? r.refundTxRef, actor: 'Party wallet',
+      })
+    }
+  }
+
+  return events.sort((x, y) => y.at - x.at)
+}
+
+function viewAuditTrail() {
+  const events = trailEvents()
+
+  return `
+  <div class="view-head">
+    <span class="caption">Evidence</span>
+    <h1 class="heading-xl">Audit trail</h1>
+    <p class="lede">Immutable evidence for every compliance action. Each row corresponds to a
+      hash anchored on the chain, in the order the events actually happened.</p>
+    <div class="actions">
+      <button class="btn secondary" data-export="json">Export audit log (JSON)</button>
+      <button class="btn secondary" data-export="csv">Export audit log (CSV)</button>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="table-wrap">
+      <table>
+        <caption class="sr">Chronological log of compliance events</caption>
+        <thead>
+          <tr>
+            <th scope="col">Timestamp</th>
+            <th scope="col">Event</th>
+            <th scope="col">File</th>
+            <th scope="col">Cryptographic hash</th>
+            <th scope="col">Actor / node</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${events.slice(0, 60).map((e) => `
+            <tr>
+              <td class="nowrap">${esc(dateTime(e.at))}</td>
+              <td><span class="event-dot ${esc(e.kind)}"></span>${esc(e.action)}</td>
+              <th scope="row" style="font-weight:600">${esc(e.ref)}</th>
+              <td class="mono">${esc(shortHash(e.hash))}</td>
+              <td class="trail-actor">${esc(e.actor)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <span>Showing ${Math.min(60, events.length)} of ${events.length} events</span>
+    </div>
+  </div>`
+}
+
+/** Hand the log over as a file, in whichever of the two formats was asked for. */
+function exportTrail(format) {
+  const events = trailEvents()
+  let body
+  let type
+
+  if (format === 'csv') {
+    const cell = (v) => `"${String(v).replaceAll('"', '""')}"`
+    body = [
+      ['timestamp', 'event', 'file', 'hash', 'actor'].join(','),
+      ...events.map((e) =>
+        [new Date(e.at).toISOString(), e.action, e.ref, e.hash, e.actor].map(cell).join(',')),
+    ].join('\n')
+    type = 'text/csv'
+  } else {
+    body = JSON.stringify(
+      events.map((e) => ({ ...e, at: new Date(e.at).toISOString() })), null, 2)
+    type = 'application/json'
+  }
+
+  const url = URL.createObjectURL(new Blob([body], { type }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `velar-audit-trail.${format}`
+  document.body.append(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+  toast(`Audit log exported as ${format.toUpperCase()}.`)
+}
+
 /* ══ Electoral authority audit view ════════════════════════════════════════ */
 
 /**
@@ -1110,7 +1505,7 @@ function viewWallets() {
  * identifies a donor. That is the point: an observer should be able to check
  * the arithmetic of a party's financing without being handed its donor list.
  */
-function viewAudit() {
+function viewTse() {
   const rows = state.rows
   const totals = rows.reduce((acc, row) => {
     const amount = row.donation.amountDecimal
@@ -1247,7 +1642,7 @@ function isPublicRoute() {
   return location.hash.replace(/^#\/?/, '').split('/')[0] === 'donate'
 }
 
-const ROUTES = ['dashboard', 'donations', 'compliance', 'wallets', 'audit']
+const ROUTES = ['dashboard', 'donations', 'compliance', 'wallets', 'audit', 'tse']
 
 function currentRoute() {
   const hash = location.hash.replace(/^#\/?/, '')
@@ -1271,7 +1666,8 @@ function render() {
     : view === 'detail' ? viewDetail(id)
     : view === 'compliance' ? viewCompliance()
     : view === 'wallets' ? viewWallets()
-    : view === 'audit' ? viewAudit()
+    : view === 'audit' ? viewAuditTrail()
+    : view === 'tse' ? viewTse()
     : viewDashboard()
 
   renderShell(view, body)
@@ -1300,15 +1696,20 @@ function wireView(view) {
     }))
 
   root.querySelectorAll('[data-return]').forEach((el) =>
-    el.addEventListener('click', async () => {
-      el.disabled = true
-      try {
-        await api(`/api/donations/${el.dataset.return}/return`, { method: 'POST' })
-        toast('The return has been executed and its evidence anchored on the chain.')
-        state.drawer = null
-        await refresh(); render()
-      } catch (err) { toast(err.message) }
+    el.addEventListener('click', () => { state.modal = { id: el.dataset.return }; render() }))
+
+  root.querySelectorAll('[data-close-modal]').forEach((el) =>
+    el.addEventListener('click', (e) => {
+      if (e.target !== el) return
+      if (state.modal?.running) return
+      state.modal = null
+      render()
     }))
+
+  root.querySelector('#confirmReturn')?.addEventListener('click', () => runReturn(state.modal.id))
+
+  root.querySelectorAll('[data-export]').forEach((el) =>
+    el.addEventListener('click', () => exportTrail(el.dataset.export)))
 
   root.querySelectorAll('[data-rescore]').forEach((el) =>
     el.addEventListener('click', async () => {
@@ -1331,7 +1732,7 @@ function wireView(view) {
 
   if (view === 'donations') wireDonationFilters()
   if (view === 'compliance') wireCompliance()
-  if (view === 'audit') wireAuditFilters()
+  if (view === 'tse') wireAuditFilters()
 
   const demo = root.querySelector('#runDemo')
   demo?.addEventListener('click', async () => {
@@ -1471,7 +1872,9 @@ window.addEventListener('hashchange', () => {
 })
 
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && state.drawer) { state.drawer = null; render() }
+  if (e.key !== 'Escape') return
+  if (state.modal && !state.modal.running) { state.modal = null; render(); return }
+  if (state.drawer) { state.drawer = null; render() }
 })
 
 if (isPublicRoute()) {

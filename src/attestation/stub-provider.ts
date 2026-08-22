@@ -1,5 +1,5 @@
-import type { Attestation, CountryCode, Donation, SourceOfFunds } from '../types.ts'
-import { hashPayload, newId } from './hash.ts'
+import type { Attestation, CountryCode, Donation, SourceOfFunds } from '../types.js'
+import { hashPayload, newId } from './hash.js'
 
 /**
  * Stand-in for a real KYC / source-of-funds provider.
