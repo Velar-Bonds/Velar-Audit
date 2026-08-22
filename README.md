@@ -70,7 +70,7 @@ flowchart TD
     W --> I["Indexador on-chain<br/>logs ERC-20 Transfer"]
     I --> R["Registro de donación<br/>fuera de cadena"]
     K["Proveedor KYC / origen de fondos"] -->|"hash de atestación<br/>(sin datos personales)"| R
-    R --> Q["Agente QVAC<br/>modelo local + reglas"]
+    R --> Q["Motor de reglas decide<br/>agente QVAC redacta"]
     Q -->|verificada| DASH["Dashboard de cumplimiento"]
     Q -->|no conforme| F["Marcada para devolución"]
     F --> RET["Devolución ejecutada"]
@@ -86,7 +86,7 @@ flowchart TD
 |---|---|---|
 | **1** | **Ingreso** | Una billetera autocustodial construida con WDK recibe las donaciones. Un indexador lee los logs `Transfer` directo de la cadena, así que **una donación no puede llegar sin quedar registrada**. El partido no se autorreporta. |
 | **2** | **Evidencia** | El proveedor de KYC emite una atestación. Guardamos una referencia seudónima del donante y el SHA-256 del contenido. **El contenido —el nombre, la cédula, el rastro bancario— nunca entra al sistema.** |
-| **3** | **Cumplimiento** | Un agente QVAC corre un modelo de lenguaje **en la máquina** y evalúa cada donación contra la ley costarricense. Correr local no es una decisión de rendimiento: una API en la nube le entregaría a un tercero la lista de donantes de todos los partidos del país. |
+| **3** | **Cumplimiento** | Un motor de reglas determinista evalúa cada donación contra la ley costarricense y decide el estado. Un agente QVAC corre un modelo de lenguaje **en la máquina** para convertir ese resultado en una frase que un auditor pueda leer. Correr local no es una decisión de rendimiento: una API en la nube le entregaría a un tercero la lista de donantes de todos los partidos del país. |
 | **4** | **Ejecución** | Las donaciones no conformes se marcan para devolución. Se ejecuta el reembolso y toda la cadena de eventos queda anclada con hash, timestamp y referencia de transacción. |
 
 ---
