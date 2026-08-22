@@ -1,7 +1,9 @@
 import { config } from '../config.ts'
 import { evaluateRules, statusFrom } from './rules.ts'
 import type { RuleContext } from './rules.ts'
-import type { Attestation, ComplianceFinding, ComplianceVerdict, Donation } from '../types.ts'
+import type {
+  Attestation, ComplianceFinding, ComplianceStatus, ComplianceVerdict, Donation,
+} from '../types.ts'
 
 /**
  * QVAC compliance agent — runs a language model ON THIS MACHINE.
@@ -10,16 +12,21 @@ import type { Attestation, ComplianceFinding, ComplianceVerdict, Donation } from
  * data. Shipping that to a cloud API would hand a third party the donor list of
  * every political party in the country. Nothing leaves the device.
  *
- * The model does NOT get the final word. `rules.ts` decides status, because a
- * regulator must be able to reproduce a verdict that carries a legal
- * consequence. The model contributes the rationale a human auditor reads, and
- * may raise concerns the rules did not encode — those escalate to review, never
- * clear a violation.
+ * The model's job is deliberately narrow: it RESTATES a decision that has
+ * already been made. `rules.ts` determines the status; the model turns the
+ * rule codes into one sentence an auditor can read.
+ *
+ * It is not allowed to reason about the law, and it is not asked to. We tried
+ * that: a 1B model asked whether a foreign donation was legal answered "el
+ * financiamiento extranjero es ilegal, pero esta donación no es ilegal" in a
+ * single sentence, and invented a statute requiring politically exposed persons
+ * to be "expuestas públicamente". Fabricated electoral law reaching a TSE
+ * auditor is a real harm, not a cosmetic one — so the model never sees a
+ * question it could answer wrongly.
  */
 
 interface AgentOutput {
   rationale: string
-  additional_concerns: string[]
 }
 
 /** Strict schema so the model returns parseable JSON instead of prose. */
@@ -33,19 +40,46 @@ const RESPONSE_SCHEMA = {
       properties: {
         rationale: {
           type: 'string',
-          description: 'Dos frases en español dirigidas al auditor del TSE.',
-        },
-        additional_concerns: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Preocupaciones no cubiertas por el motor de reglas.',
+          description: 'Una sola frase en español que reformula los hallazgos dados.',
         },
       },
-      required: ['rationale', 'additional_concerns'],
+      required: ['rationale'],
       additionalProperties: false,
     },
   },
 } as const
+
+const SYSTEM_PROMPT = `Sos un redactor tecnico para un tribunal electoral.
+Reformulas hallazgos ya decididos en UNA sola frase en espanol, de maximo 40 palabras.
+Nunca agregas informacion, nunca opinas sobre legalidad, nunca citas leyes ni articulos.
+Escribis unicamente la frase final, sin prefacios ni comentarios sobre estas instrucciones.`
+
+const FEW_SHOT = [
+  {
+    role: 'user',
+    content: `DONACION: 12000 USDC de un donante de US
+RESULTADO YA DECIDIDO: non_compliant
+HALLAZGOS:
+- Donante extranjero (US). El financiamiento politico extranjero es ilegal.`,
+  },
+  {
+    role: 'assistant',
+    content:
+      '{"rationale": "Donacion de 12000 USDC rechazada por provenir de un donante extranjero (US)."}',
+  },
+  {
+    role: 'user',
+    content: `DONACION: 1500 USDC de un donante de CR
+RESULTADO YA DECIDIDO: verified
+HALLAZGOS:
+- Atestacion valida, donante nacional, dentro del tope.`,
+  },
+  {
+    role: 'assistant',
+    content:
+      '{"rationale": "Donacion de 1500 USDC verificada: donante nacional con atestacion valida y dentro del tope."}',
+  },
+]
 
 let modelIdPromise: Promise<string | null> | null = null
 let sdk: any = null
@@ -101,67 +135,87 @@ export async function shutdown(): Promise<void> {
 function buildPrompt(
   donation: Donation,
   attestation: Attestation | null,
+  status: string,
   findings: ComplianceFinding[],
 ): string {
-  return `Eres un auditor de financiamiento político en Costa Rica. Analiza esta donación.
-
-DONACIÓN
-  monto: ${donation.amountDecimal} ${donation.asset}
-  recibida: ${new Date(donation.receivedAt).toISOString()}
-  tx: ${donation.txHash}
-
-ATESTACIÓN
-${
-  attestation
-    ? `  país del donante: ${attestation.donorCountry}
-  KYC verificado: ${attestation.kycVerified ? 'sí' : 'no'}
-  origen de fondos: ${attestation.sourceOfFunds}
-  persona expuesta políticamente: ${attestation.isPep ? 'sí' : 'no'}`
-    : '  ninguna — el donante no ha presentado atestación'
-}
-
-HALLAZGOS DEL MOTOR DE REGLAS
-${findings.map((f) => `  [${f.severity}] ${f.code}: ${f.message}`).join('\n')}
-
-Explica el resultado para el auditor y señala cualquier preocupación que las reglas no cubran.`
+  return `DONACION: ${donation.amountDecimal} ${donation.asset}${
+    attestation ? ` de un donante de ${attestation.donorCountry}` : ' sin atestacion de KYC'
+  }
+RESULTADO YA DECIDIDO: ${status}
+HALLAZGOS:
+${findings.map((f) => `- ${f.message}`).join('\n')}`
 }
 
 async function runModel(modelId: string, prompt: string): Promise<AgentOutput | null> {
   const run = sdk.completion({
     modelId,
-    history: [{ role: 'user', content: prompt }],
+    history: [
+      // Constraints live in the system turn. Put them in the user turn and the
+      // model echoes them back into the rationale as if they were findings.
+      { role: 'system', content: SYSTEM_PROMPT },
+      // Few-shot. A 1B model told the rules in prose keeps prefacing its answer
+      // with commentary about the rules; shown two answers, it copies the form.
+      ...FEW_SHOT,
+      { role: 'user', content: prompt },
+    ],
     responseFormat: RESPONSE_SCHEMA,
-    generationParams: { temp: 0.1, predict: 400 },
+    // predict was 400 and truncated the JSON mid-string, which surfaced as a
+    // parse failure rather than as what it actually was. One short sentence
+    // needs far less than this, but the headroom costs nothing.
+    generationParams: { temp: 0.1, predict: 800 },
     stream: true,
   })
 
   let text = ''
   for await (const token of run.tokenStream) text += token
 
+  let rationale: string
   try {
     const parsed = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] ?? text)
-    return {
-      rationale: typeof parsed.rationale === 'string' ? parsed.rationale : '',
-      additional_concerns: Array.isArray(parsed.additional_concerns)
-        ? parsed.additional_concerns.filter((c: unknown) => typeof c === 'string')
-        : [],
-    }
+    rationale = typeof parsed.rationale === 'string' ? parsed.rationale.trim() : ''
   } catch {
     console.warn('[qvac] model returned unparseable output; keeping rules findings only')
     return null
   }
+
+  // A rephrasing that ran long stopped being a rephrasing. Discard it rather
+  // than show an auditor a sentence the model started improvising into.
+  if (!rationale || rationale.length > 400) {
+    console.warn('[qvac] rationale empty or overlong; discarded')
+    return null
+  }
+
+  return { rationale }
+}
+
+/**
+ * Reject a rationale that contradicts the verdict it is supposed to restate.
+ *
+ * A small model asked to rephrase "non_compliant / foreign donor" produced
+ * "...de un donante extranjero (US) no rechazada". Next to a red badge that
+ * sentence is worse than no sentence at all, so a rationale that negates its
+ * own verdict is dropped and the row falls back to the rule findings.
+ */
+function contradictsVerdict(rationale: string, status: ComplianceStatus): boolean {
+  const text = rationale.toLowerCase()
+  const negated = /\bno (se )?(rechaz|devuel|marc|incumpl|viol)/.test(text)
+  const cleared = /\b(es|resulta) (legal|valida|conforme|aceptable)\b/.test(text)
+
+  if (status === 'non_compliant') return negated || cleared
+  if (status === 'verified') return /\b(rechaz|ilegal|no conforme|viola)/.test(text)
+  return false
 }
 
 export async function assess(ctx: RuleContext): Promise<ComplianceVerdict> {
   const findings = evaluateRules(ctx)
   const modelId = await getModelId()
 
-  const verdict = (engine: 'qvac' | 'rules', all: ComplianceFinding[], rationale: string) => {
-    const status = statusFrom(all)
+  const verdict = (engine: 'qvac' | 'rules', rationale: string) => {
+    const status = statusFrom(findings)
     return {
       donationId: ctx.donation.id,
       status,
-      findings: all,
+      findings,
       engine,
       rationale,
       evaluatedAt: ctx.now,
@@ -170,23 +224,21 @@ export async function assess(ctx: RuleContext): Promise<ComplianceVerdict> {
     } satisfies ComplianceVerdict
   }
 
-  if (!modelId) return verdict('rules', findings, '')
+  if (!modelId) return verdict('rules', '')
 
   try {
-    const out = await runModel(modelId, buildPrompt(ctx.donation, ctx.attestation, findings))
-    if (!out) return verdict('rules', findings, '')
+    const status = statusFrom(findings)
+    const out = await runModel(modelId, buildPrompt(ctx.donation, ctx.attestation, status, findings))
+    if (!out) return verdict('rules', '')
 
-    const enriched = [
-      ...findings,
-      ...out.additional_concerns.map((message) => ({
-        code: 'agent_concern',
-        message,
-        severity: 'warning' as const,
-      })),
-    ]
-    return verdict('qvac', enriched, out.rationale)
+    if (contradictsVerdict(out.rationale, status)) {
+      console.warn(`[qvac] rationale contradicted the '${status}' verdict; discarded`)
+      return verdict('rules', '')
+    }
+
+    return verdict('qvac', out.rationale)
   } catch (err) {
     console.warn(`[qvac] inference failed: ${(err as Error).message}`)
-    return verdict('rules', findings, '')
+    return verdict('rules', '')
   }
 }

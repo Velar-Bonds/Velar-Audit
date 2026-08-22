@@ -93,11 +93,11 @@ flowchart TD
 
 ## Dos decisiones de diseño que vale la pena defender
 
-**El modelo no tiene la última palabra.** `rules.ts` decide el estado de cumplimiento.
-`qvac-agent.ts` corre el modelo local sobre los mismos datos y aporta el razonamiento escrito
-que lee un auditor, más cualquier preocupación que las reglas no codificaron — eso puede
-escalar una donación a revisión, pero **nunca puede limpiar una violación**. Un veredicto con
-consecuencia legal tiene que ser reproducible por un regulador, y un modelo muestreado no lo es.
+**El modelo redacta, no juzga.** `rules.ts` decide el estado de cumplimiento; `qvac-agent.ts`
+corre el modelo local para convertir los códigos de regla en una frase que un auditor pueda leer.
+**Nunca se le pregunta si algo es legal**, porque un veredicto con consecuencia legal tiene que
+ser reproducible por un regulador y un modelo muestreado no lo es. Y porque lo probamos: ver
+[abajo](#por-qué-un-modelo-de-4b-y-no-uno-de-1b).
 
 **La billetera se hace cumplir a sí misma.** El motor de políticas de WDK bloquea la billetera
 con una regla `returns-only`: se niega toda transferencia saliente salvo que el destinatario ya
@@ -135,24 +135,32 @@ transacción fallida — **nunca llega a obtener una firma**.
 | ✅ | Política `returns-only` de WDK | Implementada |
 | ✅ | Anclaje de evidencia + ciclo completo | Funciona de punta a punta |
 | ✅ | Dashboard (claro y oscuro, sin errores de consola) | Funciona |
-| ⚠️ | Agente QVAC | Integrado, **pero el addon nativo no carga sin OpenSSL 3** — ver abajo |
+| ✅ | **Agente QVAC corriendo localmente** | Verificado: Qwen3 4B evalúa las 4 donaciones en ~4 s cada una |
 | 🔷 | Cadena y reembolso en `DEMO_MODE=1` | Simulados, y **marcados como `(sim)`** en la API y la UI |
 | 🔷 | Proveedor de KYC | Stub. La frontera es lo que importa; la implementación es un archivo |
 | ❌ | Autenticación, multi-partido, login del TSE | No construido |
 | ❌ | Ciclo de vida de bonos | Fuera de alcance — eso lo cubre la plataforma VELAR |
 
-### ⚠️ Requisito para QVAC en macOS
+### Requisito para QVAC en macOS
 
-El addon nativo de QVAC (`@qvac/llm-llamacpp`) enlaza contra OpenSSL 3 de Homebrew en una ruta
-absoluta. Sin eso, el worker no arranca y el sistema **cae limpiamente al motor de reglas**
-(el dashboard lo indica por fila, en la columna de estado).
+El addon nativo (`@qvac/llm-llamacpp`) enlaza contra OpenSSL 3 de Homebrew en una ruta absoluta.
+Sin eso el worker no arranca y el sistema **cae limpiamente al motor de reglas** — el dashboard
+lo indica por fila.
 
 ```bash
 brew install openssl@3
 ```
 
-Si `brew` no está instalado, primero hay que instalar Homebrew — requiere contraseña de
-administrador.
+### Por qué un modelo de 4B y no uno de 1B
+
+Probamos `LLAMA_3_2_1B_INST_Q4_0` (773 MB) y **no sirve para esta tarea**. Pedido a reformular un
+veredicto ya decidido, invirtió el significado de forma consistente: escribió *"donante extranjero
+(US) no rechazada"* para una donación no conforme. También inventó legislación electoral que no
+existe.
+
+Por eso el agente incluye una guarda que descarta cualquier razonamiento que contradiga su propio
+veredicto, y el default es `QWEN3_4B_INST_Q4_K_M` (~2,4 GB), que produce la frase correcta de
+forma estable.
 
 ---
 

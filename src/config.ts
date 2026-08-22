@@ -38,8 +38,7 @@ export const config = {
   },
 
   qvac: {
-    model: str('QVAC_MODEL', 'qwen2.5-1.5b-instruct'),
-    modelDir: str('QVAC_MODEL_DIR', './models'),
+    model: str('QVAC_MODEL', 'QWEN3_4B_INST_Q4_K_M'),
   },
 
   compliance: {
