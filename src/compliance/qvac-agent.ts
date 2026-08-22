@@ -92,7 +92,6 @@ let sdk: any = null
  */
 async function getModelId(): Promise<string | null> {
   modelIdPromise ??= (async () => {
-    if (config.demoMode) return null
     try {
       // Specifier held in a variable on purpose: '@qvac/sdk' is a genuinely
       // optional dependency — a 4.7 GB local-inference runtime that cannot be

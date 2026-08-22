@@ -11,7 +11,7 @@ import { onDonation, sweepOverdue } from './pipeline.js'
 app.listen(config.port, async () => {
   console.log(`\n  Velar Audit — donation auditability`)
   console.log(`  http://localhost:${config.port}`)
-  console.log(`  mode: ${config.demoMode ? 'DEMO (simulated chain + rules engine)' : 'LIVE (WDK + QVAC)'}\n`)
+  console.log(`  chain: ${config.wdk.network} (id ${config.wdk.chainId})\n`)
 
   await bootstrap()
   await startIndexer(onDonation)

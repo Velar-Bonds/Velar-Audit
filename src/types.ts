@@ -6,7 +6,7 @@
  * the KYC provider issued. Raw PII stays with the provider; the chain gets evidence.
  */
 
-export type Chain = 'ethereum' | 'bitcoin'
+export type Chain = 'ethereum'
 export type AssetSymbol = 'ETH' | 'BTC' | 'USDT' | 'USDC'
 
 /** ISO 3166-1 alpha-2. Costa Rica is the only compliant donor origin (see rules.ts). */
@@ -119,21 +119,39 @@ export interface ReturnAction {
 export type EvidenceKind = 'attestation' | 'verdict' | 'return'
 
 /**
- * The on-chain receipt: hash + timestamp + tx ref. This is the artifact the TSE
- * audits. Everything else in this system is a convenience index over these.
+ * `pending` — queued, waiting for its batch to be sealed.
+ * `anchored` — its root is in a confirmed transaction.
+ * `failed` — the anchoring transaction did not go through. Recorded rather than
+ *   dropped, so a gap in the trail is visible instead of silently absent.
+ */
+export type AnchorStatus = 'pending' | 'anchored' | 'failed'
+
+/**
+ * The on-chain receipt. This is the artifact the electoral tribunal audits;
+ * everything else in this system is a convenience index over these.
+ *
+ * Evidence is anchored in batches under a Merkle root, so an anchor records the
+ * leaf, the proof that connects it to the root, and the transaction the root
+ * went into. A verifier needs only those three plus the original payload.
  */
 export interface EvidenceAnchor {
   id: string
   kind: EvidenceKind
-  /** What was anchored — the SHA-256 of the subject document. */
+  /** SHA-256 of the subject document. */
   subjectHash: string
+  /** The subject hash lifted into a tree leaf, domain-separated. */
+  leafHash: string
   donationId: string
-  anchoredAt: number
-  /** Transaction that carries the hash. */
-  txRef: string
+  partyId: string
+  queuedAt: number
+  status: AnchorStatus
+  /** Set once the batch is sealed. */
+  anchoredAt: number | null
+  merkleRoot: string | null
+  merkleProof: string[] | null
+  /** Transaction carrying the root. */
+  txRef: string | null
   chain: Chain
-  /** True when the anchor was written by the simulator rather than a real tx. */
-  simulated: boolean
 }
 
 // ---------------------------------------------------------------------------

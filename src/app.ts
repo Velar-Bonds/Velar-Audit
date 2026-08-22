@@ -12,13 +12,11 @@ const WEB_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'web')
 import { config } from './config.js'
 import { store } from './store.js'
 import { getPartyWallet } from './wallet/wdk.js'
-import { injectDonation } from './wallet/indexer.js'
-import { issueAttestation } from './attestation/stub-provider.js'
 import { onDonation, onAttestation, scoreDonation, executeReturn, sweepOverdue } from './pipeline.js'
-import { seedDemo } from './demo.js'
 import { seedIdentity } from './seed.js'
 import { authRouter } from './auth/routes.js'
 import { authenticate, requireAuth, requireRole, scopeFor, toSafeUser } from './auth/middleware.js'
+import { syncNow, syncIfStale } from './sync.js'
 import type { AuthedRequest } from './auth/middleware.js'
 
 /** Identificadores de red para los enlaces de pago EIP-681. */
@@ -91,7 +89,8 @@ app.get('/api/public/parties', wrap(async (_req, res) => {
     chain: config.wdk.chain,
     network: config.wdk.network,
     token: config.wdk.token,
-    demoMode: config.demoMode,
+    chainId: config.wdk.chainId,
+    explorerUrl: config.wdk.explorerUrl,
   })
 }))
 
@@ -123,7 +122,13 @@ app.get('/api/public/qr/:partyId.svg', wrap(async (req, res) => {
 // --- Read ------------------------------------------------------------------
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, demoMode: config.demoMode, country: config.compliance.country })
+  res.json({
+    ok: true,
+    country: config.compliance.country,
+    chain: config.wdk.chain,
+    network: config.wdk.network,
+    chainId: config.wdk.chainId,
+  })
 })
 
 app.get('/api/parties', requireAuth, (req: AuthedRequest, res) => {
@@ -155,12 +160,16 @@ app.get('/api/wallet', requireAuth, wrap(async (req: AuthedRequest, res) => {
     chain: config.wdk.chain,
     network: config.wdk.network,
     token: config.wdk.token,
-    demoMode: config.demoMode,
+    chainId: config.wdk.chainId,
+    explorerUrl: config.wdk.explorerUrl,
   })
 }))
 
 /** The dashboard's only data source. Scoped to whoever is asking. */
-app.get('/api/audit', requireAuth, (req: AuthedRequest, res) => {
+app.get('/api/audit', requireAuth, wrap(async (req: AuthedRequest, res) => {
+  // Requests are what drive the indexer on a host with no background process.
+  await syncIfStale()
+
   const rows = store.auditRows(scopeFor(req.user!))
   const counts = { verified: 0, pending: 0, non_compliant: 0, unscored: 0 }
   let totalDecimal = 0
@@ -185,7 +194,7 @@ app.get('/api/audit', requireAuth, (req: AuthedRequest, res) => {
       },
     },
   })
-})
+}))
 
 /**
  * Evidence certificate for one donation.
@@ -248,18 +257,34 @@ app.get('/api/audit/certificate/:id', requireRole('tse'), (req, res) => {
 
     anchors: anchors.map((a) => ({
       kind: a.kind,
+      status: a.status,
       subjectHash: a.subjectHash,
+      leafHash: a.leafHash,
+      merkleRoot: a.merkleRoot,
+      merkleProof: a.merkleProof,
       transaction: a.txRef,
       chain: a.chain,
-      anchoredAt: new Date(a.anchoredAt).toISOString(),
-      // Never presented as real. An observer must be able to tell a simulated
-      // anchor from one a chain actually accepted.
-      simulated: a.simulated,
+      network: config.wdk.network,
+      anchoredAt: a.anchoredAt ? new Date(a.anchoredAt).toISOString() : null,
     })),
 
+    /**
+     * Everything needed to check this certificate without running this software.
+     * The point of publishing the procedure is that a regulator should not have
+     * to take the system's word for its own evidence.
+     */
     verification: {
-      note: 'Recompute SHA-256 over the canonical attestation payload and compare '
-        + 'it with subjectHash. No personal data is included in this certificate.',
+      steps: [
+        'Recompute SHA-256 over the canonical attestation payload to obtain subjectHash.',
+        'Compute leafHash = SHA-256(0x00 || subjectHash) to lift it into a tree leaf.',
+        'Fold the merkleProof into the leaf: at each step sort the pair, then compute '
+          + 'SHA-256(0x01 || left || right). The result must equal merkleRoot.',
+        'Read the transaction on the block explorer and confirm its calldata carries '
+          + 'that same merkleRoot.',
+      ],
+      explorer: `${config.wdk.explorerUrl}/tx/`,
+      note: 'No personal data is included in this certificate. Anchors still marked '
+        + 'pending have been recorded but their batch has not been sealed yet.',
     },
   })
 })
@@ -269,24 +294,13 @@ app.get('/api/anchors', requireRole('tse'), (_req, res) => res.json(store.anchor
 
 // --- Write -----------------------------------------------------------------
 
-/** A KYC provider posts an attestation for a donation. */
-app.post('/api/attestations', requireAuth, wrap(async (req: AuthedRequest, res) => {
-  const { donationId, donorRef, donorCountry, sourceOfFunds, kycVerified, isPep } = req.body ?? {}
-  const donation = donationForUser(req, res, String(donationId))
-  if (!donation) return
-
-  const attestation = issueAttestation({
-    donation,
-    donorRef: donorRef ?? 'donor-unknown',
-    donorCountry: donorCountry ?? config.compliance.country,
-    sourceOfFunds: sourceOfFunds ?? 'undisclosed',
-    kycVerified: kycVerified ?? false,
-    isPep: isPep ?? false,
-  })
-
-  const verdict = await onAttestation(attestation)
-  res.json({ attestation, verdict })
-}))
+/*
+ * There is deliberately no endpoint for posting an attestation.
+ *
+ * Attestations arrive from the provider when a donation is indexed. Letting a
+ * party submit its own would mean the audited writing its own evidence, which
+ * is the one thing this system exists to prevent.
+ */
 
 app.post('/api/donations/:id/score', requireAuth, wrap(async (req: AuthedRequest, res) => {
   const donation = donationForUser(req, res, String(req.params.id))
@@ -304,29 +318,17 @@ app.post('/api/sweep', requireRole('tse'), wrap(async (_req, res) => {
   res.json({ escalated: await sweepOverdue() })
 }))
 
-// --- Demo ------------------------------------------------------------------
+// --- Sync ------------------------------------------------------------------
 
-/** Inject a donation without a chain. Demo mode and rehearsal only. */
-app.post('/api/simulate/donation', requireAuth, wrap(async (req: AuthedRequest, res) => {
-  const { amountDecimal, fromAddress } = req.body ?? {}
-  if (typeof amountDecimal !== 'number' || typeof fromAddress !== 'string') {
-    return res.status(400).json({ error: 'amountDecimal (number) y fromAddress (string) requeridos' })
-  }
-
-  // A party may only simulate donations to itself; the TSE picks a party.
-  const scope = scopeFor(req.user!)
-  const partyId = scope ?? String(req.body?.partyId ?? store.parties()[0]?.id ?? '')
-  if (!store.party(partyId)) return res.status(400).json({ error: `Partido desconocido: ${partyId}` })
-
-  const donation = await injectDonation({ amountDecimal, fromAddress, partyId }, onDonation)
-  res.json({ donation, verdict: store.verdictFor(donation.id) })
-}))
-
-/** Reload the demo scenario. Wipes the ledger, so the TSE role only. */
-app.post('/api/demo/seed', requireRole('tse'), wrap(async (_req, res) => {
-  store.reset()
-  await seedIdentity()
-  res.json(await seedDemo())
+/**
+ * Pull the chain and seal outstanding evidence, on demand.
+ *
+ * Serverless has no background process to hold a polling interval, so the
+ * indexer is driven by requests instead. Exposed as an action so an operator
+ * can force it during a demonstration rather than waiting for the next call.
+ */
+app.post('/api/sync', requireAuth, wrap(async (_req, res) => {
+  res.json(await syncNow())
 }))
 
 // --- Errors ----------------------------------------------------------------
@@ -344,11 +346,17 @@ app.use(((err, _req, res, _next) => {
  * a judge opening the public URL would be met with an empty dashboard and no
  * way to fill it.
  */
+/**
+ * Bring the instance up to a usable state.
+ *
+ * A cold start begins with an empty store, so the first request replays the
+ * chain rather than serving a blank dashboard. That the state can be rebuilt
+ * from the chain alone is the system's central claim; here it is simply how it
+ * starts up.
+ */
 export async function bootstrap(): Promise<void> {
   await seedIdentity()
-  if (config.demoMode && store.donations().length === 0) {
-    await seedDemo()
-  }
+  await syncIfStale({ force: true })
 }
 
 export default app

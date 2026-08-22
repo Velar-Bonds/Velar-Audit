@@ -97,11 +97,14 @@ export async function getPartyWallet(walletIndex = 0): Promise<PartyWallet> {
   const cached = wallets.get(walletIndex)
   if (cached) return cached
 
-  const wallet =
-    config.demoMode || !config.wdk.seedPhrase
-      ? simulatedWallet(walletIndex)
-      : await realWallet(walletIndex)
+  if (!config.wdk.seedPhrase) {
+    throw new Error(
+      'WDK_SEED_PHRASE is not set. This system has no simulated mode: it reads and writes a ' +
+      'real chain, so it needs a real wallet. Run `npm run wallet:new` and put the phrase in .env.',
+    )
+  }
 
+  const wallet = await realWallet(walletIndex)
   wallets.set(walletIndex, wallet)
   return wallet
 }
@@ -145,29 +148,6 @@ async function realWallet(walletIndex: number): Promise<PartyWallet> {
         console.warn(`[wdk] balance read failed: ${(err as Error).message}`)
         return { native: '0', token: '0' }
       }
-    },
-  }
-}
-
-/** Demo-mode stand-in. Same interface, deterministic address per party. */
-function simulatedWallet(walletIndex: number): PartyWallet {
-  const address = `0xPARTY${String(walletIndex).padStart(2, '0')}${'0'.repeat(28)}DEMO`
-  const fakeHash = () =>
-    '0x' + Array.from({ length: 64 }, () => '0123456789abcdef'[Math.floor(Math.random() * 16)]).join('')
-  return {
-    address,
-    walletIndex,
-    async refund() {
-      return { hash: fakeHash() }
-    },
-    async anchor() {
-      return { hash: fakeHash() }
-    },
-    async balances() {
-      // Deterministic per party, so the demo shows the same figures every run.
-      const native = BigInt(Math.round((1.4 + walletIndex * 2.41) * 1e18))
-      const token = BigInt(Math.round((93_420 - walletIndex * 41_180) * 10 ** config.wdk.token.decimals))
-      return { native: String(native), token: String(token) }
     },
   }
 }

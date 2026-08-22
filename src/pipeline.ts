@@ -2,6 +2,7 @@ import { config } from './config.js'
 import { store } from './store.js'
 import { assess } from './compliance/qvac-agent.js'
 import { evaluate } from './compliance/rules.js'
+import { requestAttestation } from './attestation/stub-provider.js'
 import { anchorEvidence } from './evidence/anchor.js'
 import { getPartyWallet } from './wallet/wdk.js'
 import type { Attestation, ComplianceVerdict, Donation, ReturnAction } from './types.js'
@@ -17,6 +18,11 @@ export async function onDonation(
   donation: Donation,
   opts?: { useAgent?: boolean },
 ): Promise<ComplianceVerdict> {
+  // Ask the provider straight away. It may answer with nothing — that is the
+  // `pending` case, and it ages into a violation if the cure window passes.
+  const attestation = requestAttestation(donation)
+  if (attestation) return onAttestation(attestation, opts)
+
   return scoreDonation(donation.id, opts)
 }
 

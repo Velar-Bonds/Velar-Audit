@@ -124,6 +124,19 @@ export const store = {
 
   anchors: () => db.anchors,
 
+  /** Evidence still waiting for a batch, oldest first. */
+  pendingAnchors: (partyId: string) =>
+    db.anchors
+      .filter((a) => a.partyId === partyId && a.status === 'pending')
+      .sort((x, y) => x.queuedAt - y.queuedAt),
+
+  updateAnchor(id: string, patch: Partial<EvidenceAnchor>): void {
+    const anchor = db.anchors.find((a) => a.id === id)
+    if (!anchor) return
+    Object.assign(anchor, patch)
+    persist()
+  },
+
   cursor: () => db.cursor,
   setCursor(block: number): void {
     db.cursor = block

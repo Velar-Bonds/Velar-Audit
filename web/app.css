@@ -263,9 +263,42 @@ a:hover { color: var(--brand-dark); text-decoration: underline; }
 }
 .breadcrumbs [aria-current] { color: var(--text); font-weight: 500; }
 
-.profile { margin-left: auto; display: flex; align-items: center; gap: var(--sp-3); }
-.profile .who { text-align: right; line-height: 1.3; font-size: 13px; }
-.profile .who .org { color: var(--text-3); font-size: 12px; }
+.profile { margin-left: auto; position: relative; }
+
+.account-trigger {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: 5px var(--sp-2) 5px var(--sp-3); border-radius: var(--radius-sm);
+  border: 1px solid transparent; background: none; cursor: pointer;
+}
+.account-trigger:hover { background: var(--subtle); border-color: var(--border); }
+.account-trigger[aria-expanded="true"] { background: var(--subtle); border-color: var(--border); }
+.account-trigger .who { text-align: right; line-height: 1.3; font-size: 13px; }
+.account-trigger .who .org { color: var(--text-3); font-size: 12px; }
+.account-trigger .chev {
+  width: 8px; height: 8px; border: solid var(--text-3); border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg) translate(-2px, -2px); flex-shrink: 0;
+}
+.account-trigger[aria-expanded="true"] .chev { transform: rotate(-135deg) translate(-1px, -1px); }
+@media (max-width: 620px) { .account-trigger .who { display: none; } }
+
+.account-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 30;
+  min-width: 248px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lift); overflow: hidden;
+}
+.account-menu .identity { padding: var(--sp-4); border-bottom: 1px solid var(--border); }
+.account-menu .identity .mail { font-size: 13.5px; font-weight: 600; word-break: break-all; }
+.account-menu .identity .org { font-size: 12.5px; color: var(--text-2); margin: 2px 0 8px; }
+.account-menu .items { padding: var(--sp-1); }
+.account-menu .item {
+  display: block; width: 100%; text-align: left;
+  padding: 9px var(--sp-3); border: none; background: none; cursor: pointer;
+  font-size: 13.5px; color: var(--text); border-radius: var(--radius-sm);
+}
+.account-menu .item:hover { background: var(--subtle); }
+.account-menu .item.danger { color: var(--err-fg); }
+.account-menu .item.danger:hover { background: var(--err-bg); }
 .avatar {
   width: 32px; height: 32px; border-radius: 50%;
   background: var(--brand-100); color: var(--navy);

@@ -21,15 +21,56 @@ type DonationHandler = (donation: Donation) => unknown | Promise<unknown>
 
 let timer: NodeJS.Timeout | null = null
 
+/**
+ * JSON-RPC with a fallback endpoint.
+ *
+ * Public RPCs rate-limit, and losing the indexer mid-demonstration because one
+ * provider throttled is an avoidable way to fail.
+ */
 async function rpc<T>(method: string, params: unknown[]): Promise<T> {
-  const res = await fetch(config.wdk.rpcUrl, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-  })
-  const body = (await res.json()) as { result?: T; error?: { message: string } }
-  if (body.error) throw new Error(`${method}: ${body.error.message}`)
-  return body.result as T
+  const endpoints = [config.wdk.rpcUrl, config.wdk.rpcFallbackUrl].filter(Boolean)
+  let lastError: Error | null = null
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+      })
+      const body = (await res.json()) as { result?: T; error?: { message: string } }
+      if (body.error) throw new Error(body.error.message)
+      return body.result as T
+    } catch (err) {
+      lastError = err as Error
+    }
+  }
+
+  throw new Error(`${method}: ${lastError?.message ?? 'no RPC endpoint answered'}`)
+}
+
+/**
+ * Block timestamps, cached.
+ *
+ * A donation's time is when the chain accepted it, not when we happened to
+ * index it. Using ingestion time would mean every replay shifted the whole
+ * history forward, which would break both the cure window and the claim that
+ * state can be rebuilt from the chain.
+ */
+const blockTimes = new Map<number, number>()
+
+async function blockTime(blockNumber: number): Promise<number> {
+  const cached = blockTimes.get(blockNumber)
+  if (cached !== undefined) return cached
+
+  const block = await rpc<{ timestamp: string } | null>(
+    'eth_getBlockByNumber', [`0x${blockNumber.toString(16)}`, false],
+  )
+  const seconds = block ? Number(BigInt(block.timestamp)) : Math.floor(Date.now() / 1000)
+  const ms = seconds * 1000
+
+  blockTimes.set(blockNumber, ms)
+  return ms
 }
 
 /** Left-pad an address to a 32-byte log topic. */
@@ -54,8 +95,9 @@ async function scanOnce(
   const headHex = await rpc<string>('eth_blockNumber', [])
   const head = Number(BigInt(headHex))
 
-  // First run: start a little behind the tip rather than replaying all history.
-  const from = store.cursor() || Math.max(head - 5_000, 0)
+  // A cold start replays from the configured block so state rebuilds from the
+  // chain. Left at 0, it starts just behind the tip instead of replaying years.
+  const from = store.cursor() || config.indexer.startBlock || Math.max(head - 5_000, 0)
   if (from > head) return
 
   const logs = await rpc<Array<{
@@ -87,7 +129,7 @@ async function scanOnce(
       fromAddress,
       toAddress: partyAddress,
       blockNumber,
-      receivedAt: Date.now(),
+      receivedAt: await blockTime(blockNumber),
       partyId,
     }
 
@@ -104,24 +146,22 @@ async function scanOnce(
   store.setCursor(head + 1)
 }
 
-export async function startIndexer(onDonation: DonationHandler): Promise<void> {
-  if (config.demoMode) {
-    console.log('[indexer] demo mode — chain polling disabled, use POST /api/simulate/donation')
-    return
-  }
-
-  const tick = async () => {
-    for (const party of store.parties()) {
-      try {
-        const wallet = await getPartyWallet(party.walletIndex)
-        await scanOnce(wallet.address, party.id, party.walletIndex, onDonation)
-      } catch (err) {
-        // A flaky RPC must never take the indexer down mid-demo, and one
-        // party's failure must not stop the others from being watched.
-        console.warn(`[indexer] scan failed for ${party.code}: ${(err as Error).message}`)
-      }
+/** One pass over every party wallet. Shared by the timer and by request-driven sync. */
+export async function scanAllParties(onDonation: DonationHandler): Promise<void> {
+  for (const party of store.parties()) {
+    try {
+      const wallet = await getPartyWallet(party.walletIndex)
+      await scanOnce(wallet.address, party.id, party.walletIndex, onDonation)
+    } catch (err) {
+      // A flaky RPC must never take the indexer down, and one party's failure
+      // must not stop the others from being watched.
+      console.warn(`[indexer] scan failed for ${party.code}: ${(err as Error).message}`)
     }
   }
+}
+
+export async function startIndexer(onDonation: DonationHandler): Promise<void> {
+  const tick = () => scanAllParties(onDonation)
 
   await tick()
   timer = setInterval(tick, config.indexer.pollMs)
@@ -131,42 +171,4 @@ export async function startIndexer(onDonation: DonationHandler): Promise<void> {
 export function stopIndexer(): void {
   if (timer) clearInterval(timer)
   timer = null
-}
-
-/**
- * Inject a donation without a chain. Used by demo mode and by `npm run
- * donate:sim` so the pipeline can be rehearsed with no testnet dependency.
- */
-export async function injectDonation(
-  input: Partial<Donation> & Pick<Donation, 'amountDecimal' | 'fromAddress' | 'partyId'>,
-  onDonation: DonationHandler,
-): Promise<Donation> {
-  const party = store.party(input.partyId)
-  if (!party) throw new Error(`unknown party ${input.partyId}`)
-  const wallet = await getPartyWallet(party.walletIndex)
-  const asset = input.asset ?? (config.wdk.token.symbol as AssetSymbol)
-  const decimals = config.wdk.token.decimals
-
-  const donation: Donation = {
-    id: newId('don'),
-    txHash:
-      input.txHash ??
-      '0x' + Array.from({ length: 64 }, () => '0123456789abcdef'[Math.floor(Math.random() * 16)]).join(''),
-    chain: input.chain ?? config.wdk.chain,
-    asset,
-    amountRaw: BigInt(Math.round(input.amountDecimal * 10 ** decimals)).toString(),
-    amountDecimal: input.amountDecimal,
-    fromAddress: input.fromAddress,
-    toAddress: wallet.address,
-    blockNumber: input.blockNumber ?? null,
-    receivedAt: input.receivedAt ?? Date.now(),
-    partyId: party.id,
-  }
-
-  const { donation: saved, isNew } = store.addDonation(donation)
-  if (isNew) {
-    registerDonorAddress(party.walletIndex, saved.fromAddress)
-    await onDonation(saved)
-  }
-  return saved
 }

@@ -11,6 +11,7 @@ const state = {
   filters: { q: '', status: 'all', asset: 'all', page: 1 },
   drawer: null,
   modal: null,
+  accountMenu: false,
   poll: null,
 }
 
@@ -34,6 +35,23 @@ const longDate = (ms) =>
 const dateTime = (ms) => {
   const d = new Date(ms)
   return `${longDate(ms)}, ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+/** A transaction or address on the configured block explorer. */
+function explorerLink(kind, value) {
+  const base = state.wallets?.explorerUrl
+  const short = `<span class="mono">${esc(shortHash(value))}</span>`
+  if (!base || !value) return short
+  return `<a href="${esc(base)}/${kind}/${esc(value)}" target="_blank" rel="noopener noreferrer">${short}</a>`
+}
+
+/** One line describing where a donation's evidence stands. */
+function anchorSummary(anchors) {
+  if (anchors.length === 0) return 'No evidence recorded'
+  const counts = anchors.reduce((acc, a) => ({ ...acc, [a.status]: (acc[a.status] ?? 0) + 1 }), {})
+  return Object.entries(counts)
+    .map(([status, n]) => `${n} ${status}`)
+    .join(' · ')
 }
 
 /** Stable reference, derived from the id rather than from list position. */
@@ -551,9 +569,8 @@ function renderShell(view, body) {
           <li><span class="chip" style="background:var(--navy)"></span>Navy Blue</li>
         </ul>
         <span class="env-pill">
-          <span class="dot ${state.wallets?.demoMode ? '' : 'live'}"
-            ${state.wallets?.demoMode ? 'style="background:var(--text-3)"' : ''}></span>
-          ${state.wallets?.demoMode ? 'Demonstration mode' : 'Live — WDK'}
+          <span class="dot live"></span>
+          ${esc(state.wallets?.network ?? '')} · live
         </span>
       </div>
     </aside>
@@ -571,21 +588,37 @@ function renderShell(view, body) {
         </nav>
 
         <div class="profile">
-          <span class="who">
-            ${esc(me.email)}<br>
-            <span class="org">${esc(org)}</span>
-          </span>
-          <span class="avatar" aria-hidden="true">${esc(initials)}</span>
-          <button class="btn secondary sm" id="logout">Sign out</button>
+          <button class="account-trigger" id="accountTrigger"
+            aria-haspopup="menu" aria-expanded="${state.accountMenu}" aria-controls="accountMenu">
+            <span class="who">
+              ${esc(me.email)}<br>
+              <span class="org">${esc(org)}</span>
+            </span>
+            <span class="avatar" aria-hidden="true">${esc(initials)}</span>
+            <span class="chev" aria-hidden="true"></span>
+          </button>
+
+          ${state.accountMenu ? `
+          <div class="account-menu" id="accountMenu" role="menu" aria-label="Account">
+            <div class="identity">
+              <div class="mail">${esc(me.email)}</div>
+              <div class="org">${esc(org)}</div>
+              <strong class="tag ${me.role === 'tse' ? 'returned' : 'unscored'}">
+                ${me.role === 'tse' ? 'Electoral tribunal' : 'Party treasurer'}</strong>
+            </div>
+            <div class="items">
+              <button class="item danger" role="menuitem" id="logout">Sign out</button>
+            </div>
+          </div>` : ''}
         </div>
       </header>
 
       <div class="phase-banner">
         <strong class="tag returned">Beta</strong>
         <span>A service being built for the Supreme Electoral Tribunal of Costa Rica.
-          ${state.wallets?.demoMode
-            ? 'It is currently running against a simulated chain.'
-            : 'Connected to the test network, with local analysis.'}</span>
+          Reading and writing ${esc(state.wallets?.chain ?? 'the chain')} on
+          ${esc(state.wallets?.network ?? '')} (chain id ${esc(state.wallets?.chainId ?? '')}).</span>
+        <button class="btn secondary sm" id="syncNow" style="margin-left:auto">Sync now</button>
       </div>
 
       <main id="main" class="content">${body}</main>
@@ -595,7 +628,18 @@ function renderShell(view, body) {
   ${state.drawer ? renderDrawer(state.drawer) : ''}
   ${state.modal ? renderReturnModal(state.modal) : ''}`
 
-  root.querySelector('#logout').addEventListener('click', async () => {
+  const trigger = root.querySelector('#accountTrigger')
+  trigger?.addEventListener('click', () => {
+    state.accountMenu = !state.accountMenu
+    render()
+    // Re-rendering replaces the node, so focus has to be placed after the fact:
+    // opening a menu and leaving focus behind strands a keyboard user.
+    const next = root.querySelector(state.accountMenu ? '.account-menu .item' : '#accountTrigger')
+    next?.focus()
+  })
+
+  root.querySelector('#logout')?.addEventListener('click', async () => {
+    state.accountMenu = false
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' })
     renderLogin()
   })
@@ -666,8 +710,7 @@ function viewDashboard() {
     <div class="actions">
       <button class="btn secondary" data-route="donations">View all donations</button>
       <button class="btn secondary" data-route="compliance">Review compliance</button>
-      ${state.me.role === 'tse'
-        ? '<button class="btn" id="runDemo">Reload demonstration data</button>' : ''}
+
     </div>
   </div>
 
@@ -702,7 +745,7 @@ function viewDashboard() {
     <section class="cols two-thirds">
       <div class="block">
         <h2 class="heading-m">Activity over the last 7 days</h2>
-        <p class="caption">Amount received per day, in USDC.</p>
+        <p class="caption">Amount received per day, in ${esc(state.wallets?.token.symbol ?? '')}.</p>
         ${areaChart(activitySeries())}
       </div>
 
@@ -986,9 +1029,11 @@ function viewDetail(id) {
         attAnchor && ['Attestation hash', `<span class="mono">${esc(attAnchor.subjectHash)}</span>`],
         verdictAnchor && ['Verdict hash', `<span class="mono">${esc(verdictAnchor.subjectHash)}</span>`],
         returnAnchor && ['Return hash', `<span class="mono">${esc(returnAnchor.subjectHash)}</span>`],
-        anchors[0] && ['Anchoring transaction',
-          `<span class="mono">${esc(anchors[0].txRef)}</span>${
-            anchors[0].simulated ? ' (simulated in demonstration mode)' : ''}`],
+        ['Anchoring status', anchorSummary(anchors)],
+        anchors.find((a) => a.txRef) && ['Anchoring transaction',
+          explorerLink('tx', anchors.find((a) => a.txRef).txRef)],
+        anchors.find((a) => a.merkleRoot) && ['Merkle root',
+          `<span class="mono">${esc(anchors.find((a) => a.merkleRoot).merkleRoot)}</span>`],
       ]))}
 
     ${r?.status === 'returned'
@@ -1510,7 +1555,7 @@ function viewTse() {
   const totals = rows.reduce((acc, row) => {
     const amount = row.donation.amountDecimal
     acc.declared += amount
-    if (row.anchors.some((a) => !a.simulated)) acc.anchored += amount
+    if (row.anchors.some((a) => a.status === 'anchored')) acc.anchored += amount
     if (statusOf(row) === 'non_compliant') acc.investigation += amount
     if (statusOf(row) === 'returned') acc.returned += amount
     return acc
@@ -1734,6 +1779,23 @@ function wireView(view) {
   if (view === 'compliance') wireCompliance()
   if (view === 'tse') wireAuditFilters()
 
+  const sync = root.querySelector('#syncNow')
+  sync?.addEventListener('click', async () => {
+    sync.disabled = true
+    sync.textContent = 'Syncing…'
+    try {
+      const result = await api('/api/sync', { method: 'POST' })
+      await refresh(); render()
+      toast(result.batchesSealed > 0
+        ? `Chain synced. ${result.batchesSealed} evidence ${result.batchesSealed === 1 ? 'batch' : 'batches'} anchored.`
+        : 'Chain synced. Nothing new to anchor.')
+    } catch (err) {
+      toast(err.message)
+      sync.disabled = false
+      sync.textContent = 'Sync now'
+    }
+  })
+
   const demo = root.querySelector('#runDemo')
   demo?.addEventListener('click', async () => {
     demo.disabled = true
@@ -1860,7 +1922,8 @@ async function start() {
   state.poll = setInterval(async () => {
     // A donation arriving mid-demo should appear on its own. Never re-render
     // while a drawer is open or someone is typing into a filter.
-    if (state.drawer || document.activeElement?.id === 'q') return
+    if (state.drawer || state.modal || state.accountMenu) return
+    if (document.activeElement?.id === 'q') return
     try { await refresh(); render() } catch { /* session handled in api() */ }
   }, 8000)
 }
@@ -1873,9 +1936,23 @@ window.addEventListener('hashchange', () => {
 
 window.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return
+  if (state.accountMenu) {
+    state.accountMenu = false
+    render()
+    root.querySelector('#accountTrigger')?.focus()
+    return
+  }
   if (state.modal && !state.modal.running) { state.modal = null; render(); return }
   if (state.drawer) { state.drawer = null; render() }
 })
+
+// Any click that lands outside the menu closes it — including on the page behind.
+document.addEventListener('click', (e) => {
+  if (!state.accountMenu) return
+  if (e.target.closest('#accountMenu, #accountTrigger')) return
+  state.accountMenu = false
+  render()
+}, true)
 
 if (isPublicRoute()) {
   await renderDonate()
