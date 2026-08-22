@@ -111,19 +111,42 @@ Cuatro vistas, con barra lateral fija y navegación por rol:
 | **Cumplimiento** | Estado del agente QVAC, cola de "requiere atención" ordenada por riesgo, panel lateral de revisión |
 | **Billeteras** | Saldos por partido con su índice de derivación, y el diagrama de evidencia sin exposición |
 
-### Tres decisiones deliberadas, sin CDN
+### Base de diseño
 
-Nada en la interfaz se descarga de un tercero en tiempo de ejecución. En un
+La interfaz sigue el sistema de diseño del [Government Project Delivery](https://projectdelivery.gov.uk/get-involved/connect-and-contribute/publishing-content-on-the-government-project-delivery-website/design-system/)
+del Reino Unido, que extiende el GOV.UK Design System. Se adopta su lenguaje
+visual y, sobre todo, sus reglas de accesibilidad:
+
+- **Esquinas rectas, sin sombras decorativas.** La profundidad se consigue con
+  bordes sólidos, no con efectos que desaparecen en modo alto contraste.
+- **Texto de 19 px** y alturas de línea múltiplo de 5 px, que es lo que sostiene
+  el ritmo vertical de todo el sistema.
+- **El estado de foco amarillo** con borde inferior negro: uno de los patrones
+  de accesibilidad mejor probados que existen, y no depende del color para
+  distinguirse.
+- **Etiquetas de estado en mayúsculas**, donde el significado lo lleva el texto
+  y no el color, para quien no distingue dos rojos de dos verdes.
+- **Lenguaje llano**, siguiendo la guía de estilo: frases cortas, sin jerga
+  innecesaria, sin abreviaturas sin explicar.
+
+**Lo que no se adopta es la identidad.** Nada de corona, wordmark de GOV.UK ni
+imaginería del gobierno británico. Esto es una herramienta para el Tribunal
+Supremo de Elecciones de Costa Rica; citar un sistema de diseño abierto es
+legítimo, aparentar ser un servicio de otro gobierno no lo sería.
+
+### Sin CDN
+
+Nada de la interfaz se descarga de un tercero en tiempo de ejecución. En un
 hackathon el wifi del venue es el adversario, y un dashboard que depende de
-`fonts.googleapis.com` o `cdn.jsdelivr.net` puede aparecer en blanco frente al
-jurado.
+`fonts.googleapis.com` puede aparecer en blanco frente al jurado.
 
-- **Poppins autoalojada** en `web/fonts/` (4 pesos, 32 KB en total) en vez de Google Fonts.
-- **Gráficos dibujados en SVG a mano** (`web/charts.js`, ~120 líneas) en vez de Recharts, que
-  habría traído React y un paso de build entre editar y ver.
-- **Iconos en línea** (`web/icons.js`) en vez de un paquete de Lucide.
-
-La animación del flujo es CSS y respeta `prefers-reduced-motion`.
+- **Barlow autoalojada** en `web/fonts/`. Es la fuente que usa Project Delivery
+  y es Open Font License. GDS Transport, la de GOV.UK, tiene una licencia que
+  **solo permite su uso en servicios de gov.uk**, así que no era una opción.
+- **Gráficos dibujados en SVG a mano** (`web/charts.js`, ~120 líneas) en vez de
+  una librería que habría traído React y un paso de build.
+- **Sin librería de iconos.** Este sistema de diseño es de base textual, así que
+  no hacen falta.
 
 ### Lo que la interfaz no inventa
 
@@ -131,8 +154,7 @@ El diseño original pedía mostrar un porcentaje de confianza del modelo. No
 existe tal número en este sistema, y fabricarlo para que se viera bien sería
 exactamente la clase de dato que un jurado pide verificar. En su lugar cada
 donación muestra **qué motor la evaluó** y **cuántas reglas se le aplicaron**.
-Todas las cifras del dashboard salen de donaciones reales que pasaron por el
-pipeline.
+Todas las cifras salen de donaciones reales que pasaron por el pipeline.
 
 ---
 
@@ -283,8 +305,7 @@ web/index.html                   shell
 web/app.js                       router, vistas y estado
 web/app.css                      sistema de diseño
 web/charts.js                    gráficos en SVG
-web/icons.js                     iconos en línea
-web/fonts/                       Poppins autoalojada
+web/fonts/                       Barlow autoalojada
 ```
 
 ## Comandos

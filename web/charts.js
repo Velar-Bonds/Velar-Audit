@@ -6,9 +6,13 @@
  * the product needs, and drawn directly they cost ~120 lines, no dependency,
  * and work offline. Same visual language: thin axes, no heavy gridlines, one
  * accent colour.
+ *
+ * Restyled to the Project Delivery palette: flat fills instead of gradients,
+ * square line joins and markers, and a 3px stroke that survives a printout or
+ * a high-contrast mode.
  */
 
-const ACCENT = '#155EEF'
+const ACCENT = '#1d70b8'
 
 const escapeText = (s) =>
   String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
@@ -76,24 +80,20 @@ export function areaChart(series, { height = 260 } = {}) {
       : '',
   ).join('')
 
+  // Square markers rather than circles: this system avoids rounded shapes.
   const dots = points.map((p, i) =>
-    `<circle cx="${p.x}" cy="${p.y}" r="3" fill="#fff" stroke="${ACCENT}" stroke-width="2"
-       opacity="${i === points.length - 1 ? 1 : 0}"/>`,
+    i === points.length - 1
+      ? `<rect x="${p.x - 4}" y="${p.y - 4}" width="8" height="8" fill="${ACCENT}"/>`
+      : '',
   ).join('')
 
   return `
   <svg class="chart" viewBox="0 0 ${W} ${H}" role="img"
        aria-label="Actividad de donaciones por día">
-    <defs>
-      <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${ACCENT}" stop-opacity="0.14"/>
-        <stop offset="100%" stop-color="${ACCENT}" stop-opacity="0.01"/>
-      </linearGradient>
-    </defs>
     ${ticks}
-    <path d="${area}" fill="url(#areaFill)"/>
-    <path d="${line}" fill="none" stroke="${ACCENT}" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="${area}" fill="${ACCENT}" fill-opacity="0.12"/>
+    <path d="${line}" fill="none" stroke="${ACCENT}" stroke-width="3"
+          stroke-linecap="square" stroke-linejoin="miter"/>
     ${dots}
     ${labels}
   </svg>`
@@ -110,7 +110,7 @@ export function donutChart(slices, { size = 200, thickness = 26 } = {}) {
 
   if (total === 0) {
     return `<svg class="chart" viewBox="0 0 ${size} ${size}" role="img" aria-label="Sin datos">
-      <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="#E4E7EC" stroke-width="${thickness}"/>
+      <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="#cecece" stroke-width="${thickness}"/>
     </svg>`
   }
 
@@ -133,11 +133,11 @@ export function donutChart(slices, { size = 200, thickness = 26 } = {}) {
   return `
   <svg class="chart" viewBox="0 0 ${size} ${size}" style="max-width:${size}px;margin:0 auto"
        role="img" aria-label="Distribución por estado de cumplimiento">
-    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="#F2F4F7" stroke-width="${thickness}"/>
+    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="#f3f2f1" stroke-width="${thickness}"/>
     ${arcs}
     <text x="${c}" y="${c - 2}" text-anchor="middle"
-          style="font-size:26px;font-weight:700;fill:#101828">${headline}%</text>
-    <text x="${c}" y="${c + 18}" text-anchor="middle"
-          style="font-size:11.5px;fill:#667085">verificadas</text>
+          style="font-size:30px;font-weight:700;fill:#0b0c0c">${headline}%</text>
+    <text x="${c}" y="${c + 20}" text-anchor="middle"
+          style="font-size:15px;fill:#484949">verificadas</text>
   </svg>`
 }
