@@ -147,3 +147,54 @@ export interface AuditRow {
   returnAction: ReturnAction | null
   anchors: EvidenceAnchor[]
 }
+
+// ---------------------------------------------------------------------------
+// Identity — who is looking, and what they are allowed to see
+// ---------------------------------------------------------------------------
+
+/**
+ * `partido` sees only its own donations. `tse` sees every party — it is the
+ * supervisory role, and the whole point of the system.
+ */
+export type Role = 'tse' | 'partido'
+
+export interface Party {
+  id: string
+  name: string
+  /** Short code shown in the UI. */
+  code: string
+  country: CountryCode
+  /**
+   * BIP-44 account index for this party's donation wallet, derived from the
+   * one seed. Each party gets its own address without its own seed phrase.
+   */
+  walletIndex: number
+}
+
+export interface User {
+  id: string
+  email: string
+  role: Role
+  /** null for `tse` — the tribunal does not belong to a party. */
+  partyId: string | null
+  /** scrypt hash, salted. Never leaves the server. */
+  passwordHash: string
+  createdAt: number
+}
+
+/** What the client is allowed to know about the logged-in user. */
+export interface SafeUser {
+  id: string
+  email: string
+  role: Role
+  partyId: string | null
+  partyName: string | null
+}
+
+export interface Session {
+  /** Opaque random token. Stored hashed, like a password. */
+  tokenHash: string
+  userId: string
+  createdAt: number
+  expiresAt: number
+}

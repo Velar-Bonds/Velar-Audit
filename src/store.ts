@@ -1,12 +1,13 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type {
-  Donation, Attestation, ComplianceVerdict, ReturnAction, EvidenceAnchor, AuditRow,
+  Donation, Attestation, ComplianceVerdict, ReturnAction, EvidenceAnchor, AuditRow, Party,
 } from './types.ts'
 
 const DB_PATH = './data/velar-audit.json'
 
 interface Db {
+  parties: Party[]
   donations: Donation[]
   attestations: Attestation[]
   verdicts: ComplianceVerdict[]
@@ -17,7 +18,7 @@ interface Db {
 }
 
 const empty: Db = {
-  donations: [], attestations: [], verdicts: [], returns: [], anchors: [], cursor: 0,
+  parties: [], donations: [], attestations: [], verdicts: [], returns: [], anchors: [], cursor: 0,
 }
 
 function load(): Db {
@@ -38,6 +39,16 @@ function persist(): void {
 }
 
 export const store = {
+  parties: () => db.parties,
+  party: (id: string) => db.parties.find((p) => p.id === id) ?? null,
+
+  putParty(party: Party): Party {
+    db.parties = db.parties.filter((p) => p.id !== party.id)
+    db.parties.push(party)
+    persist()
+    return party
+  },
+
   /** Idempotent on txHash — the indexer is allowed to see the same tx twice. */
   addDonation(d: Donation): { donation: Donation; isNew: boolean } {
     const existing = db.donations.find((x) => x.txHash === d.txHash)
@@ -103,9 +114,16 @@ export const store = {
     persist()
   },
 
-  /** The dashboard read model: newest donation first, everything joined. */
-  auditRows(): AuditRow[] {
+  /**
+   * The dashboard read model: newest donation first, everything joined.
+   *
+   * `partyId` scopes the result to one party. Passing null means "every party",
+   * which only the TSE is ever allowed to ask for — enforced at the route, not
+   * here, but the shape of this call is where the distinction lives.
+   */
+  auditRows(partyId: string | null = null): AuditRow[] {
     return [...db.donations]
+      .filter((d) => partyId === null || d.partyId === partyId)
       .sort((a, b) => b.receivedAt - a.receivedAt)
       .map((donation) => ({
         donation,

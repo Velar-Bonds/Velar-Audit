@@ -1,7 +1,7 @@
 import { config } from '../config.ts'
-import { store } from '../store.ts'
 import { newId } from '../attestation/hash.ts'
 import { getPartyWallet, registerDonorAddress } from './wdk.ts'
+import { store } from '../store.ts'
 import type { AssetSymbol, Donation } from '../types.ts'
 
 /**
@@ -45,7 +45,12 @@ function toDecimal(raw: bigint, decimals: number): number {
   return Number(raw) / 10 ** decimals
 }
 
-async function scanOnce(partyAddress: string, onDonation: DonationHandler): Promise<void> {
+async function scanOnce(
+  partyAddress: string,
+  partyId: string,
+  walletIndex: number,
+  onDonation: DonationHandler,
+): Promise<void> {
   const headHex = await rpc<string>('eth_blockNumber', [])
   const head = Number(BigInt(headHex))
 
@@ -83,13 +88,13 @@ async function scanOnce(partyAddress: string, onDonation: DonationHandler): Prom
       toAddress: partyAddress,
       blockNumber,
       receivedAt: Date.now(),
-      partyId: 'party-demo',
+      partyId,
     }
 
     const { donation: saved, isNew } = store.addDonation(donation)
     if (!isNew) continue
 
-    registerDonorAddress(fromAddress)
+    registerDonorAddress(walletIndex, fromAddress)
     console.log(
       `[indexer] donation ${saved.amountDecimal} ${saved.asset} from ${fromAddress} (${saved.txHash})`,
     )
@@ -105,20 +110,22 @@ export async function startIndexer(onDonation: DonationHandler): Promise<void> {
     return
   }
 
-  const wallet = await getPartyWallet()
-
   const tick = async () => {
-    try {
-      await scanOnce(wallet.address, onDonation)
-    } catch (err) {
-      // A flaky RPC must never take the indexer down mid-demo.
-      console.warn(`[indexer] scan failed: ${(err as Error).message}`)
+    for (const party of store.parties()) {
+      try {
+        const wallet = await getPartyWallet(party.walletIndex)
+        await scanOnce(wallet.address, party.id, party.walletIndex, onDonation)
+      } catch (err) {
+        // A flaky RPC must never take the indexer down mid-demo, and one
+        // party's failure must not stop the others from being watched.
+        console.warn(`[indexer] scan failed for ${party.code}: ${(err as Error).message}`)
+      }
     }
   }
 
   await tick()
   timer = setInterval(tick, config.indexer.pollMs)
-  console.log(`[indexer] watching ${wallet.address} every ${config.indexer.pollMs}ms`)
+  console.log(`[indexer] watching ${store.parties().length} party wallets every ${config.indexer.pollMs}ms`)
 }
 
 export function stopIndexer(): void {
@@ -131,10 +138,12 @@ export function stopIndexer(): void {
  * donate:sim` so the pipeline can be rehearsed with no testnet dependency.
  */
 export async function injectDonation(
-  input: Partial<Donation> & Pick<Donation, 'amountDecimal' | 'fromAddress'>,
+  input: Partial<Donation> & Pick<Donation, 'amountDecimal' | 'fromAddress' | 'partyId'>,
   onDonation: DonationHandler,
 ): Promise<Donation> {
-  const wallet = await getPartyWallet()
+  const party = store.party(input.partyId)
+  if (!party) throw new Error(`unknown party ${input.partyId}`)
+  const wallet = await getPartyWallet(party.walletIndex)
   const asset = input.asset ?? (config.wdk.token.symbol as AssetSymbol)
   const decimals = config.wdk.token.decimals
 
@@ -151,12 +160,12 @@ export async function injectDonation(
     toAddress: wallet.address,
     blockNumber: input.blockNumber ?? null,
     receivedAt: input.receivedAt ?? Date.now(),
-    partyId: input.partyId ?? 'party-demo',
+    partyId: party.id,
   }
 
   const { donation: saved, isNew } = store.addDonation(donation)
   if (isNew) {
-    registerDonorAddress(saved.fromAddress)
+    registerDonorAddress(party.walletIndex, saved.fromAddress)
     await onDonation(saved)
   }
   return saved

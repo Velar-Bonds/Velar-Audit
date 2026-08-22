@@ -50,7 +50,16 @@ npm install && cp .env.example .env
 npm start
 ```
 
-Abrí <http://localhost:3400> y presioná **Cargar escenario de demo**.
+Abrí <http://localhost:3400>. La pantalla de login trae botones para entrar con cualquiera
+de las tres cuentas de demo (contraseña `velar-demo-2026`):
+
+| Cuenta | Rol | Ve |
+|---|---|---|
+| `tse@velar.cr` | TSE | Las 4 donaciones, de los dos partidos |
+| `alfa@velar.cr` | Partido Alfa | Sus 3 donaciones |
+| `beta@velar.cr` | Partido Beta | Su 1 donación |
+
+Entrá como TSE y presioná **Recargar escenario de demo**.
 
 Vas a ver cuatro donaciones que cubren todos los resultados posibles: una limpia, una esperando
 su atestación, una de un donante extranjero y una sobre el tope anual. Presioná **Devolver** en
@@ -88,6 +97,26 @@ flowchart TD
 | **2** | **Evidencia** | El proveedor de KYC emite una atestación. Guardamos una referencia seudónima del donante y el SHA-256 del contenido. **El contenido —el nombre, la cédula, el rastro bancario— nunca entra al sistema.** |
 | **3** | **Cumplimiento** | Un motor de reglas determinista evalúa cada donación contra la ley costarricense y decide el estado. Un agente QVAC corre un modelo de lenguaje **en la máquina** para convertir ese resultado en una frase que un auditor pueda leer. Correr local no es una decisión de rendimiento: una API en la nube le entregaría a un tercero la lista de donantes de todos los partidos del país. |
 | **4** | **Ejecución** | Las donaciones no conformes se marcan para devolución. Se ejecuta el reembolso y toda la cadena de eventos queda anclada con hash, timestamp y referencia de transacción. |
+
+---
+
+## Quién ve qué
+
+| | TSE | Partido |
+|---|---|---|
+| Ver donaciones | Todos los partidos | Solo las propias |
+| Devolver / re-evaluar | Cualquiera | Solo las propias |
+| Bitácora completa de evidencia | Sí | No |
+| Recargar el escenario | Sí | No |
+
+El aislamiento entre partidos **no es un filtro en la lista**. Cada acción sobre una donación
+verifica la propiedad, y un partido que pide una donación ajena por id recibe **404, no 403** —
+porque saber que esa donación existe ya es información a la que no tiene derecho.
+
+Las contraseñas se guardan con `scrypt` y sal por usuario; los tokens de sesión se guardan
+hasheados, así que una base robada no entrega sesiones vivas. El login responde en tiempo
+constante exista o no la cuenta, para que el formulario no sirva para averiguar quién trabaja en
+el TSE, y corta a los 8 intentos fallidos por correo.
 
 ---
 
@@ -138,7 +167,8 @@ transacción fallida — **nunca llega a obtener una firma**.
 | ✅ | **Agente QVAC corriendo localmente** | Verificado: Qwen3 4B evalúa las 4 donaciones en ~4 s cada una |
 | 🔷 | Cadena y reembolso en `DEMO_MODE=1` | Simulados, y **marcados como `(sim)`** en la API y la UI |
 | 🔷 | Proveedor de KYC | Stub. La frontera es lo que importa; la implementación es un archivo |
-| ❌ | Autenticación, multi-partido, login del TSE | No construido |
+| ✅ | **Autenticación y roles (TSE / partido)** | Verificado, incluidos los intentos de escalación |
+| ✅ | **Multi-partido con billetera derivada por partido** | Cada partido, su propio índice BIP-44 del mismo seed |
 | ❌ | Ciclo de vida de bonos | Fuera de alcance — eso lo cubre la plataforma VELAR |
 
 ### Requisito para QVAC en macOS
@@ -206,6 +236,11 @@ src/
   compliance/rules.ts            reglas deterministas — la autoridad
   compliance/qvac-agent.ts       modelo local — razonamiento y alertas extra
   evidence/anchor.ts             hash + timestamp + referencia de tx
+  auth/passwords.ts              scrypt con sal por usuario
+  auth/store.ts                  usuarios y sesiones (archivo aparte)
+  auth/middleware.ts             sesión, roles y alcance por partido
+  auth/routes.ts                 login / logout / me
+  seed.ts                        partidos y cuentas de demo
   server.ts                      API HTTP
   demo.ts                        el escenario de cuatro donaciones
 web/index.html                   dashboard
