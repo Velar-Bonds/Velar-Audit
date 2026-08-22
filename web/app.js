@@ -114,24 +114,17 @@ function renderLogin(error = '') {
   state.me = null
 
   root.innerHTML = `
-  <a href="#main" class="skip-link">Saltar al contenido principal</a>
+  <div class="auth-screen">
+    <form class="auth-card" id="loginForm" novalidate>
+      <div class="auth-brand">
+        <span class="brand-mark">V</span>
+        <div>
+          <div class="brand-name">Velar Audit</div>
+          <div class="body-s secondary">Auditoría de donaciones</div>
+        </div>
+      </div>
 
-  <header class="site-header">
-    <div class="width-container">
-      <div class="header-inner"><span class="service-name">Velar Audit</span></div>
-    </div>
-  </header>
-
-  <div class="width-container">
-    <div class="phase-banner">
-      <strong class="tag">Beta</strong>
-      <span>Este es un servicio nuevo. Ayúdenos a mejorarlo.</span>
-    </div>
-  </div>
-
-  <main id="main">
-    <div class="width-container auth-screen">
-      <form class="auth-card" id="loginForm" novalidate>
+      <div class="block">
         ${error ? `
         <div class="error-summary" role="alert" tabindex="-1" id="errorSummary">
           <h2>Hay un problema</h2>
@@ -139,7 +132,7 @@ function renderLogin(error = '') {
         </div>` : ''}
 
         <h1 class="heading-l">Inicie sesión</h1>
-        <p style="margin:15px 0 30px">
+        <p class="secondary body-s" style="margin:4px 0 24px">
           Use la cuenta institucional que le asignó su organización.</p>
 
         <div class="field${error ? ' has-error' : ''}">
@@ -152,24 +145,21 @@ function renderLogin(error = '') {
           <input class="input" type="password" id="password" autocomplete="current-password" required>
         </div>
 
-        <button class="btn" type="submit" id="loginBtn">Iniciar sesión</button>
+        <button class="btn block" type="submit" id="loginBtn">Iniciar sesión</button>
 
-        <hr class="rule">
+        <hr class="rule" style="margin:24px 0 20px">
 
         <h2 class="heading-s">Cuentas de demostración</h2>
-        <p class="body-s secondary" style="margin:5px 0 15px">
+        <p class="body-s secondary" style="margin:2px 0 12px">
           Todas usan la contraseña <span class="mono">velar-demo-2026</span>.</p>
-        <ul class="task-list">
-          ${DEMO_ACCOUNTS.map(([email, label]) => `
-            <li>
-              <span class="title">${esc(label)}</span>
-              <span class="detail mono">${esc(email)}</span>
-              <button type="button" class="btn-link" data-email="${esc(email)}">Usar esta cuenta</button>
-            </li>`).join('')}
-        </ul>
-      </form>
-    </div>
-  </main>`
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${DEMO_ACCOUNTS.map(([email, label]) =>
+            `<button type="button" class="btn secondary sm"
+              data-email="${esc(email)}">${esc(label)}</button>`).join('')}
+        </div>
+      </div>
+    </form>
+  </div>`
 
   root.querySelector('#errorSummary')?.focus()
 
@@ -226,70 +216,79 @@ function renderShell(view, body) {
   const me = state.me
   const org = me.role === 'tse' ? 'Tribunal Supremo de Elecciones' : (me.partyName ?? 'Partido')
   const crumbs = CRUMBS[view] ?? CRUMBS.dashboard
+  const initials = me.email.slice(0, 2).toUpperCase()
 
   root.innerHTML = `
   <a href="#main" class="skip-link">Saltar al contenido principal</a>
 
-  <header class="site-header">
-    <div class="width-container">
-      <div class="header-inner">
-        <span class="service-name">Velar Audit</span>
-        <div class="header-user">
+  <div class="navbar">
+    <div class="navbar-inner">
+      <button class="brand-link" data-route="dashboard" aria-label="Velar Audit, ir al resumen">
+        <span class="brand-mark">V</span>
+        <span>
+          <span class="brand-name">Velar Audit</span><br>
+          <span class="brand-sub">Tribunal Supremo de Elecciones</span>
+        </span>
+      </button>
+
+      <div class="navbar-right">
+        <span class="navbar-env">
+          <span class="dot ${state.wallets?.demoMode ? '' : 'live'}"
+            ${state.wallets?.demoMode ? 'style="background:var(--blue-300)"' : ''}></span>
+          ${state.wallets?.demoMode ? 'Modo demostración' : 'WDK y análisis local'}
+        </span>
+        <span class="navbar-user">
           <span class="who">
             ${esc(me.email)}<br>
-            <span class="role">${esc(org)}</span>
+            <span class="org">${esc(org)}</span>
           </span>
-          <button class="btn-link" id="logout" style="color:#fff">Cerrar sesión</button>
-        </div>
+          <span class="avatar" aria-hidden="true">${esc(initials)}</span>
+        </span>
+        <button class="btn secondary sm" id="logout">Cerrar sesión</button>
       </div>
     </div>
-  </header>
+  </div>
 
-  <nav class="service-nav" aria-label="Menú del servicio">
-    <div class="width-container">
-      <ul>
+  <div class="shell">
+    <aside class="sidebar">
+      <nav class="nav" aria-label="Menú principal">
+        <div class="nav-label">Supervisión</div>
         ${NAV.map((item) => {
           const active = view === item.route || (view === 'detail' && item.route === 'donations')
           const count = item.count?.()
-          return `<li><button class="nav-item" data-route="${item.route}"
-            ${active ? 'aria-current="page"' : ''}>${item.label}${
-              count != null ? ` <span class="nav-count">(${count})</span>` : ''}</button></li>`
+          return `<button class="nav-item" data-route="${item.route}"
+            ${active ? 'aria-current="page"' : ''}>
+            <span>${item.label}</span>
+            ${count != null ? `<span class="nav-count">${count}</span>` : ''}
+          </button>`
         }).join('')}
-      </ul>
-    </div>
-  </nav>
+      </nav>
+    </aside>
 
-  <div class="width-container">
-    <div class="phase-banner">
-      <strong class="tag">Beta</strong>
-      <span>Servicio en construcción para el Tribunal Supremo de Elecciones.
-        ${state.wallets?.demoMode
-          ? 'Ahora mismo funciona en modo demostración, con una cadena simulada.'
-          : 'Conectado a la red de pruebas, con análisis local.'}</span>
-    </div>
+    <div class="main">
+      <header class="topbar">
+        <nav class="breadcrumbs" aria-label="Ruta de navegación">
+          <ol>
+            <li><button data-route="dashboard">Inicio</button></li>
+            ${crumbs.map(([label, route]) =>
+              `<li>${route
+                ? `<button data-route="${route}">${esc(label)}</button>`
+                : `<span aria-current="page">${esc(label)}</span>`}</li>`).join('')}
+          </ol>
+        </nav>
+      </header>
 
-    <nav class="breadcrumbs" aria-label="Ruta de navegación">
-      <ol>
-        <li><button data-route="dashboard">Inicio</button></li>
-        ${crumbs.map(([label, route]) =>
-          `<li>${route
-            ? `<button data-route="${route}">${esc(label)}</button>`
-            : `<span aria-current="page">${esc(label)}</span>`}</li>`).join('')}
-      </ol>
-    </nav>
+      <div class="phase-banner">
+        <strong class="tag returned">Beta</strong>
+        <span>Servicio en construcción para el Tribunal Supremo de Elecciones.
+          ${state.wallets?.demoMode
+            ? 'Ahora mismo funciona con una cadena simulada.'
+            : 'Conectado a la red de pruebas, con análisis local.'}</span>
+      </div>
+
+      <main id="main" class="content">${body}</main>
+    </div>
   </div>
-
-  <main id="main">
-    <div class="width-container">${body}</div>
-  </main>
-
-  <footer class="site-footer">
-    <div class="width-container">
-      <p><strong>Velar Audit</strong> — auditoría de donaciones para financiamiento político.</p>
-      <p class="secondary">Los datos personales de las personas donantes no se almacenan en este
-        sistema ni en la cadena de bloques. Solo se registran hashes verificables.</p>
-    </div>
-  </footer>
 
   ${state.drawer ? renderDrawer(state.drawer) : ''}`
 
@@ -426,7 +425,7 @@ function viewDashboard() {
       <ol class="flow">
         ${FLOW_STEPS.map(([title, desc], i) => `
           <li class="flow-step">
-            <div class="n">Paso ${i + 1}</div>
+            <div class="n">${i + 1}</div>
             <div class="t">${title}</div>
             <div class="d">${desc}</div>
           </li>`).join('')}
@@ -434,10 +433,14 @@ function viewDashboard() {
     </section>
 
     <section>
-      <h2 class="heading-l">Donaciones recientes</h2>
-      ${donationTable(state.rows.slice(0, 8), { compact: true })}
-      <p style="margin-top:20px">
-        <button class="btn-link" data-route="donations">Ver las ${s.count} donaciones</button></p>
+      <h2 class="heading-l" style="margin-bottom:16px">Donaciones recientes</h2>
+      <div class="table-card">
+        ${donationTable(state.rows.slice(0, 8), { compact: true })}
+        <div class="pager">
+          <span>Se muestran las 8 más recientes</span>
+          <button class="btn-link" data-route="donations">Ver las ${s.count} donaciones</button>
+        </div>
+      </div>
     </section>
   </div>`
 }
@@ -534,36 +537,38 @@ function viewDonations() {
     <p class="lede">Se muestran ${rows.length} de ${state.rows.length} donaciones.</p>
   </div>
 
-  <div class="tabs" role="tablist">
-    ${TABS.map(([key, label]) => `
-      <button class="tab" role="tab" data-tab="${key}"
-        aria-selected="${state.filters.status === key}">${label} (${counts[key] ?? 0})</button>`).join('')}
-  </div>
-
-  <div class="filter-bar">
-    <div class="field">
-      <label for="q">Buscar</label>
-      <p class="hint body-s">Por referencia, hash de transacción o dirección de origen.</p>
-      <input class="input narrow" id="q" type="search" value="${esc(state.filters.q)}">
+  <div class="table-card">
+    <div class="tabs" role="tablist">
+      ${TABS.map(([key, label]) => `
+        <button class="tab" role="tab" data-tab="${key}"
+          aria-selected="${state.filters.status === key}">${label} (${counts[key] ?? 0})</button>`).join('')}
     </div>
-    <div class="field">
-      <label for="assetFilter">Activo</label>
-      <select class="select" id="assetFilter" style="width:auto">
-        <option value="all">Todos</option>
-        ${assets.map((a) => `<option value="${esc(a)}"
-          ${state.filters.asset === a ? 'selected' : ''}>${esc(a)}</option>`).join('')}
-      </select>
+
+    <div class="filter-bar">
+      <div class="field">
+        <label for="q">Buscar</label>
+        <p class="hint">Por referencia, hash de transacción o dirección de origen.</p>
+        <input class="input narrow" id="q" type="search" value="${esc(state.filters.q)}">
+      </div>
+      <div class="field">
+        <label for="assetFilter">Activo</label>
+        <select class="select" id="assetFilter" style="width:auto">
+          <option value="all">Todos</option>
+          ${assets.map((a) => `<option value="${esc(a)}"
+            ${state.filters.asset === a ? 'selected' : ''}>${esc(a)}</option>`).join('')}
+        </select>
+      </div>
     </div>
-  </div>
 
-  ${donationTable(slice)}
+    ${donationTable(slice)}
 
-  <div class="pager">
-    <span>Página ${page} de ${pages}</span>
-    <span>
-      <button class="btn secondary sm" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Anterior</button>
-      <button class="btn secondary sm" data-page="${page + 1}" ${page >= pages ? 'disabled' : ''}>Siguiente</button>
-    </span>
+    <div class="pager">
+      <span>Página ${page} de ${pages}</span>
+      <span style="display:flex;gap:8px">
+        <button class="btn secondary sm" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Anterior</button>
+        <button class="btn secondary sm" data-page="${page + 1}" ${page >= pages ? 'disabled' : ''}>Siguiente</button>
+      </span>
+    </div>
   </div>`
 }
 
@@ -762,7 +767,7 @@ function viewCompliance() {
              ordenadas por nivel de riesgo.`}</p>
 
       ${attention.length === 0 ? '' : `
-      <ul class="task-list">
+      <ul class="task-list table-card">
         ${attention.slice(0, 15).map((row) => {
           const risk = riskOf(row)
           const worst = (row.verdict?.findings ?? [])
