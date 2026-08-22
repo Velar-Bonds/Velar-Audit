@@ -1,209 +1,223 @@
+<div align="center">
+
 # Velar Audit
 
-Donation auditability for political financing. Every donation a party receives is
-traceable from the moment it lands to the moment it is verified, flagged, or
-returned — with the evidence anchored on a public chain and the donor's identity
-never leaving the KYC provider.
+**Auditoría de donaciones para financiamiento político**
 
-Built at the **Aleph Hackathon 2026** for the **Tether WDK** and **QVAC** tracks.
+Cada donación es trazable desde que llega hasta que se verifica, se marca o se devuelve.
+La evidencia queda en cadena. La identidad del donante nunca sale del proveedor de KYC.
 
----
+<br>
 
-## Why
+![Node.js](https://img.shields.io/badge/Node.js-22+-5FA04E?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Tether WDK](https://img.shields.io/badge/Tether_WDK-009393?style=for-the-badge&logo=tether&logoColor=white)
+![QVAC](https://img.shields.io/badge/QVAC-Local_AI-6E4AFF?style=for-the-badge&logo=probot&logoColor=white)
+![Ethereum](https://img.shields.io/badge/Sepolia-3C3C3D?style=for-the-badge&logo=ethereum&logoColor=white)
+![Express](https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=white)
+![License](https://img.shields.io/badge/MIT-A31F34?style=for-the-badge)
 
-Costa Rica's Tribunal Supremo de Elecciones supervises how political parties are
-financed, but the trail it supervises is paper. Nobody can independently verify
-who gave what, when, or whether the money was legal — and the checks that do
-exist happen months after an election.
+**Aleph Hackathon 2026** · Tracks **WDK** + **QVAC** de Tether
 
-The TSE's president and magistrados asked us to build this after seeing our work
-on bond traceability. This is the donation half of that ask.
-
-The constraint that shapes everything: donor identity is sensitive and legally
-protected, but the *fact* of a donation and its compliance status must be
-publicly verifiable. So sensitive data stays off-chain with the provider that
-collected it, and only hashes go on-chain.
+</div>
 
 ---
 
-## Run it
+## El problema
 
-Needs Node 22+. Nothing else — no database, no API keys, no testnet funds.
+El Tribunal Supremo de Elecciones de Costa Rica supervisa el financiamiento de los partidos
+políticos, pero lo hace sobre papel. Nadie puede verificar de forma independiente quién dio
+qué, cuándo, ni si el dinero era legal — y los controles que sí existen ocurren meses después
+de la elección.
+
+El presidente y los magistrados del TSE nos pidieron construir esto.
+
+La restricción que define todo el diseño: **la identidad del donante es información sensible y
+protegida, pero el hecho de la donación y su estado de cumplimiento deben ser verificables
+públicamente.** Por eso los datos sensibles se quedan fuera de la cadena, con el proveedor que
+los recolectó, y a la cadena solo van hashes.
+
+---
+
+## Correlo en 4 comandos
+
+Requiere Node 22+. Nada más — sin base de datos, sin llaves, sin fondos de testnet.
 
 ```bash
 git clone https://github.com/Velar-Bonds/Velar-Audit.git
 cd Velar-Audit
-npm install
-cp .env.example .env
+npm install && cp .env.example .env
 npm start
 ```
 
-Open <http://localhost:3400> and press **Cargar escenario de demo**.
+Abrí <http://localhost:3400> y presioná **Cargar escenario de demo**.
 
-You get four donations covering every compliance outcome: one clean, one waiting
-on its attestation, one from a foreign donor, one over the annual cap. Press
-**Devolver** on a non-compliant donation to execute the return and watch the
-on-chain evidence trail grow.
+Vas a ver cuatro donaciones que cubren todos los resultados posibles: una limpia, una esperando
+su atestación, una de un donante extranjero y una sobre el tope anual. Presioná **Devolver** en
+una no conforme y se ejecuta la devolución con su evidencia anclada.
 
-`DEMO_MODE=1` is the default: the chain is simulated and compliance runs on the
-deterministic rules engine. The pipeline, the data model, and the dashboard are
-identical to live mode — see [Going live](#going-live).
-
----
-
-## What it does
-
-**1 — Intake.** A self-custodial party wallet built on WDK receives donations. An
-indexer reads ERC-20 `Transfer` logs straight from the chain, so a donation
-cannot arrive without being recorded. The party does not self-report.
-
-**2 — Evidence link.** A KYC / source-of-funds provider issues an attestation for
-each donation. We keep a pseudonymous donor reference and the SHA-256 of the
-attestation payload. The payload itself — the name, the ID number, the bank
-trail — never enters this system.
-
-**3 — Compliance.** A QVAC agent runs a language model *on the machine* and
-assesses each donation against Costa Rican financing law. Running locally is not
-a performance choice: a cloud API here would hand a third party the donor list of
-every political party in the country.
-
-**4 — Enforcement.** Non-compliant donations are flagged for return. The refund is
-executed and the whole chain of events — attestation hash, verdict, return — is
-anchored on-chain with a hash, a timestamp, and a transaction reference.
+> `DEMO_MODE=1` viene por defecto: la cadena está simulada y el cumplimiento corre con el motor
+> de reglas determinista. El pipeline, el modelo de datos y el dashboard son **idénticos** al
+> modo real.
 
 ---
 
-## Architecture
+## Cómo funciona
 
-```
-  donor ──USDC──▶ party wallet (WDK, self-custodial)
-                        │
-                        ▼
-                  chain indexer  ──▶  donation record (off-chain)
-                                            │
-   KYC provider ──attestation hash──────────┤
-   (no raw PII)                             │
-                                            ▼
-                              QVAC agent (local model)
-                              + deterministic rules
-                                            │
-                        ┌───────────────────┴───────────────┐
-                        ▼                                   ▼
-                 compliance dashboard            on-chain evidence anchor
-                 (party + TSE view)              hash + timestamp + tx ref
-                        │
-                        ▼
-                 flag ▶ return ▶ anchored
+```mermaid
+flowchart TD
+    D["Donante"] -->|USDC| W["Billetera del partido<br/>WDK · autocustodia"]
+    W --> I["Indexador on-chain<br/>logs ERC-20 Transfer"]
+    I --> R["Registro de donación<br/>fuera de cadena"]
+    K["Proveedor KYC / origen de fondos"] -->|"hash de atestación<br/>(sin datos personales)"| R
+    R --> Q["Agente QVAC<br/>modelo local + reglas"]
+    Q -->|verificada| DASH["Dashboard de cumplimiento"]
+    Q -->|no conforme| F["Marcada para devolución"]
+    F --> RET["Devolución ejecutada"]
+    Q --> A["Evidencia on-chain<br/>hash + timestamp + tx"]
+    RET --> A
+    DASH --> TSE["Vista de auditoría del TSE"]
+    A --> TSE
 ```
 
-### The model does not get the final word
+### Las cuatro etapas
 
-`src/compliance/rules.ts` decides compliance status. `src/compliance/qvac-agent.ts`
-runs the local model over the same data and contributes the written rationale an
-auditor reads, plus any concern the rules did not encode — which escalates a
-donation to review but can never clear a violation.
-
-This is deliberate. A verdict that carries a legal consequence has to be
-reproducible by a regulator, and a sampled language model is not reproducible.
-When the model is unavailable the rules engine simply stands alone and the
-dashboard says so, per row.
-
-### The wallet enforces the rule itself
-
-WDK's policy engine gates the party wallet with a `returns-only` policy: outbound
-transfers are denied unless the recipient is an address that has already donated
-to us. A treasurer who wants to move donated funds somewhere they do not belong
-does not get a failed transaction — they never get a signature.
-
-### What is anchored
-
-Only hashes. The anchors are the only part of this system a regulator has to
-trust; the database and the dashboard are a convenience layer that can be rebuilt
-from them. A failed anchor records itself as `unanchored` rather than
-disappearing, so a gap in the trail stays visible.
-
----
-
-## Compliance rules
-
-| Rule | Severity | Basis |
+| | Etapa | Qué pasa |
 |---|---|---|
-| `foreign_donor` | violation | Foreign political financing is illegal in CR, CO, BR and AR |
-| `kyc_failed` | violation | Provider could not verify the donor's identity |
-| `undisclosed_source` | violation | Anonymous donations are not admissible |
-| `over_cap` | violation | Donor exceeded the annual per-donor cap |
-| `attestation_tampered` | violation | Attestation hash does not reproduce |
-| `no_attestation` | warning → violation | Escalates when the cure window expires |
-| `pep_donor` | warning | Politically exposed person — manual TSE review |
-
-> The foreign-financing prohibition is real law. **The numeric cap in
-> `.env.example` is a placeholder**, not a legal figure — confirm it against the
-> Código Electoral before this is presented to the TSE as anything but an
-> illustration.
+| **1** | **Ingreso** | Una billetera autocustodial construida con WDK recibe las donaciones. Un indexador lee los logs `Transfer` directo de la cadena, así que **una donación no puede llegar sin quedar registrada**. El partido no se autorreporta. |
+| **2** | **Evidencia** | El proveedor de KYC emite una atestación. Guardamos una referencia seudónima del donante y el SHA-256 del contenido. **El contenido —el nombre, la cédula, el rastro bancario— nunca entra al sistema.** |
+| **3** | **Cumplimiento** | Un agente QVAC corre un modelo de lenguaje **en la máquina** y evalúa cada donación contra la ley costarricense. Correr local no es una decisión de rendimiento: una API en la nube le entregaría a un tercero la lista de donantes de todos los partidos del país. |
+| **4** | **Ejecución** | Las donaciones no conformes se marcan para devolución. Se ejecuta el reembolso y toda la cadena de eventos queda anclada con hash, timestamp y referencia de transacción. |
 
 ---
 
-## Going live
+## Dos decisiones de diseño que vale la pena defender
+
+**El modelo no tiene la última palabra.** `rules.ts` decide el estado de cumplimiento.
+`qvac-agent.ts` corre el modelo local sobre los mismos datos y aporta el razonamiento escrito
+que lee un auditor, más cualquier preocupación que las reglas no codificaron — eso puede
+escalar una donación a revisión, pero **nunca puede limpiar una violación**. Un veredicto con
+consecuencia legal tiene que ser reproducible por un regulador, y un modelo muestreado no lo es.
+
+**La billetera se hace cumplir a sí misma.** El motor de políticas de WDK bloquea la billetera
+con una regla `returns-only`: se niega toda transferencia saliente salvo que el destinatario ya
+haya donado. Un tesorero que quiera mover fondos donados a donde no corresponde no recibe una
+transacción fallida — **nunca llega a obtener una firma**.
+
+---
+
+## Reglas de cumplimiento
+
+| Regla | Severidad | Base |
+|---|---|---|
+| `foreign_donor` | 🔴 violación | El financiamiento político extranjero es ilegal en CR, CO, BR y AR |
+| `kyc_failed` | 🔴 violación | El proveedor no pudo verificar la identidad |
+| `undisclosed_source` | 🔴 violación | No se admiten donaciones anónimas |
+| `over_cap` | 🔴 violación | El donante superó el tope anual |
+| `attestation_tampered` | 🔴 violación | El hash de la atestación no reproduce |
+| `no_attestation` | 🟡 → 🔴 | Escala cuando vence el plazo de subsanación |
+| `pep_donor` | 🟡 advertencia | Persona expuesta políticamente — revisión manual del TSE |
+
+> ⚠️ La prohibición de financiamiento extranjero es ley real. **El tope numérico en
+> `.env.example` es un valor de ejemplo**, no una cifra legal — hay que confirmarlo contra el
+> Código Electoral antes de presentarlo al TSE como algo más que una ilustración.
+
+---
+
+## Estado actual — qué sirve y qué no
+
+| | Componente | Estado |
+|---|---|---|
+| ✅ | Modelo de datos, hashing canónico, formato de anclaje | Funciona, verificado |
+| ✅ | Motor de reglas de cumplimiento | Funciona, verificado |
+| ✅ | Billetera WDK — derivación de dirección y saldos | **Verificado contra Sepolia en vivo** |
+| ✅ | Indexador de logs ERC-20 | Implementado |
+| ✅ | Política `returns-only` de WDK | Implementada |
+| ✅ | Anclaje de evidencia + ciclo completo | Funciona de punta a punta |
+| ✅ | Dashboard (claro y oscuro, sin errores de consola) | Funciona |
+| ⚠️ | Agente QVAC | Integrado, **pero el addon nativo no carga sin OpenSSL 3** — ver abajo |
+| 🔷 | Cadena y reembolso en `DEMO_MODE=1` | Simulados, y **marcados como `(sim)`** en la API y la UI |
+| 🔷 | Proveedor de KYC | Stub. La frontera es lo que importa; la implementación es un archivo |
+| ❌ | Autenticación, multi-partido, login del TSE | No construido |
+| ❌ | Ciclo de vida de bonos | Fuera de alcance — eso lo cubre la plataforma VELAR |
+
+### ⚠️ Requisito para QVAC en macOS
+
+El addon nativo de QVAC (`@qvac/llm-llamacpp`) enlaza contra OpenSSL 3 de Homebrew en una ruta
+absoluta. Sin eso, el worker no arranca y el sistema **cae limpiamente al motor de reglas**
+(el dashboard lo indica por fila, en la columna de estado).
 
 ```bash
-npm run qvac:pull       # download model weights — do this first, before you need them
-npm run wallet:new      # generate a BIP-39 seed for the party wallet
+brew install openssl@3
 ```
 
-Put the seed in `.env` as `WDK_SEED_PHRASE`, set `DEMO_MODE=0`, fund the address
-with Sepolia ETH and test USDC, then `npm start`.
-
-`WDK_TOKEN_ADDRESS` is the only thing that changes between USDC, USDT, and
-mainnet — the WDK code path is identical for any ERC-20.
+Si `brew` no está instalado, primero hay que instalar Homebrew — requiere contraseña de
+administrador.
 
 ---
 
-## Layout
+## Pasar a modo real
+
+```bash
+npm run qvac:pull    # descargá los pesos del modelo ANTES de necesitarlos
+npm run wallet:new   # generá la semilla BIP-39 de la billetera del partido
+```
+
+Poné la semilla en `.env` como `WDK_SEED_PHRASE`, cambiá `DEMO_MODE=0`, fondeá la dirección con
+ETH y USDC de Sepolia, y `npm start`.
+
+`WDK_TOKEN_ADDRESS` es lo único que cambia entre USDC, USDT y mainnet — el camino de código de
+WDK es idéntico para cualquier ERC-20.
+
+---
+
+## Stack
+
+| Tecnología | Rol |
+|---|---|
+| **Tether WDK** | Billetera autocustodial del partido + motor de políticas |
+| **Tether QVAC** | Modelo de lenguaje local para el análisis de cumplimiento |
+| **TypeScript** + **Node 22** | Todo el backend, corrido con `tsx` — sin paso de build |
+| **Express** | API HTTP |
+| **Ethereum Sepolia** | Cadena de la demo, vía RPC público |
+| **HTML + CSS** | Dashboard en un solo archivo, sin framework ni bundler |
+
+---
+
+## Estructura
 
 ```
 src/
-  types.ts                  canonical data model
-  store.ts                  append-only audit store
-  pipeline.ts               intake → evidence → compliance → enforcement
-  wallet/wdk.ts             WDK party wallet + returns-only policy
-  wallet/indexer.ts         ERC-20 Transfer log indexer
-  attestation/hash.ts       canonical JSON + SHA-256
-  attestation/stub-provider.ts   stand-in for Sumsub / Truora
-  compliance/rules.ts       deterministic rules — the authority
-  compliance/qvac-agent.ts  local model — rationale and extra concerns
-  evidence/anchor.ts        on-chain hash + timestamp + tx ref
-  server.ts                 HTTP API
-  demo.ts                   the four-donation scenario
-web/index.html              dashboard, no build step
+  types.ts                       modelo de datos canónico
+  store.ts                       almacén de auditoría
+  pipeline.ts                    ingreso → evidencia → cumplimiento → ejecución
+  wallet/wdk.ts                  billetera WDK + política returns-only
+  wallet/indexer.ts              indexador de logs ERC-20
+  attestation/hash.ts            JSON canónico + SHA-256
+  attestation/stub-provider.ts   stand-in de Sumsub / Truora
+  compliance/rules.ts            reglas deterministas — la autoridad
+  compliance/qvac-agent.ts       modelo local — razonamiento y alertas extra
+  evidence/anchor.ts             hash + timestamp + referencia de tx
+  server.ts                      API HTTP
+  demo.ts                        el escenario de cuatro donaciones
+web/index.html                   dashboard
 ```
 
-## Scripts
+## Comandos
 
-| Command | What it does |
+| Comando | Qué hace |
 |---|---|
-| `npm start` | Run the server |
-| `npm run dev` | Run with reload on change |
+| `npm start` | Levanta el servidor |
+| `npm run dev` | Igual, con recarga al guardar |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm run qvac:pull` | Download the QVAC model weights |
-| `npm run wallet:new` | Generate a party wallet seed phrase |
-| `npm run donate:sim -- 2500 0xdonor…` | Push a donation into a running server |
+| `npm run qvac:pull` | Descarga los pesos del modelo QVAC |
+| `npm run wallet:new` | Genera la semilla de la billetera |
+| `npm run donate:sim -- 2500 0xdonante…` | Inyecta una donación en un servidor corriendo |
 
 ---
 
-## Honest status
+<div align="center">
 
-Built in a hackathon weekend. What is real and what is not:
+MIT · [LICENSE](LICENSE)
 
-- **Real:** the data model, the hashing and anchor format, the compliance rules,
-  the WDK wallet and policy integration, the ERC-20 log indexer, the QVAC
-  integration and its fallback behaviour, the dashboard.
-- **Simulated in demo mode:** the chain and the refund transaction. Anchors are
-  marked `simulated` in the API and the UI — we do not dress them up as real.
-- **Stubbed:** the KYC provider. The boundary is what matters; the implementation
-  is one file.
-- **Not built:** authentication, multi-party tenancy, the TSE's own login, and
-  the bond-certificate lifecycle that the wider VELAR platform covers.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+</div>
