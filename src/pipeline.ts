@@ -1,6 +1,7 @@
 import { config } from './config.ts'
 import { store } from './store.ts'
 import { assess } from './compliance/qvac-agent.ts'
+import { evaluate } from './compliance/rules.ts'
 import { anchorEvidence } from './evidence/anchor.ts'
 import { getPartyWallet } from './wallet/wdk.ts'
 import type { Attestation, ComplianceVerdict, Donation, ReturnAction } from './types.ts'
@@ -12,28 +13,39 @@ import type { Attestation, ComplianceVerdict, Donation, ReturnAction } from './t
  */
 
 /** Step 1 + 3: a donation landed. Score it with whatever evidence exists now. */
-export async function onDonation(donation: Donation): Promise<ComplianceVerdict> {
-  const verdict = await scoreDonation(donation.id)
-  return verdict
+export async function onDonation(
+  donation: Donation,
+  opts?: { useAgent?: boolean },
+): Promise<ComplianceVerdict> {
+  return scoreDonation(donation.id, opts)
 }
 
 /** Step 2: the KYC provider issued an attestation. Store, anchor, re-score. */
-export async function onAttestation(attestation: Attestation): Promise<ComplianceVerdict> {
+export async function onAttestation(
+  attestation: Attestation,
+  opts?: { useAgent?: boolean },
+): Promise<ComplianceVerdict> {
   store.putAttestation(attestation)
   await anchorEvidence('attestation', attestation.donationId, attestation.hash)
-  return scoreDonation(attestation.donationId)
+  return scoreDonation(attestation.donationId, opts)
 }
 
-/** Step 3: run the compliance agent and anchor the verdict. */
-export async function scoreDonation(donationId: string): Promise<ComplianceVerdict> {
+/**
+ * Step 3: run the compliance agent and anchor the verdict.
+ *
+ * `useAgent: false` skips the local model and takes the rules verdict directly.
+ * Backfilled history uses it — re-running an LLM over months of donations you
+ * already judged costs minutes and tells you nothing new.
+ */
+export async function scoreDonation(
+  donationId: string,
+  { useAgent = true }: { useAgent?: boolean } = {},
+): Promise<ComplianceVerdict> {
   const donation = store.donation(donationId)
   if (!donation) throw new Error(`unknown donation ${donationId}`)
 
-  const verdict = await assess({
-    donation,
-    attestation: store.attestationFor(donationId),
-    now: Date.now(),
-  })
+  const ctx = { donation, attestation: store.attestationFor(donationId), now: Date.now() }
+  const verdict = useAgent ? await assess(ctx) : evaluate(ctx)
 
   store.putVerdict(verdict)
   await anchorEvidence('verdict', donationId, {

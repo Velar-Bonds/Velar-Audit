@@ -21,6 +21,8 @@ export interface PartyWallet {
   refund(to: string, amountRaw: bigint): Promise<{ hash: string }>
   /** Write a 32-byte evidence hash into calldata on a zero-value self-transaction. */
   anchor(hash: string): Promise<{ hash: string }>
+  /** Native and token balances, in base units. */
+  balances(): Promise<{ native: string; token: string }>
 }
 
 const wallets = new Map<number, PartyWallet>()
@@ -128,6 +130,22 @@ async function realWallet(walletIndex: number): Promise<PartyWallet> {
       const result = await account.sendTransaction({ to: address, value: 0n, data: `0x${hash}` })
       return { hash: result.hash }
     },
+    async balances() {
+      // A balance read must never blank the wallets page. An unfunded or
+      // unreachable address reports zero, which is also the truthful answer.
+      try {
+        const [native, token] = await Promise.all([
+          account.getBalance(),
+          config.wdk.token.address
+            ? account.getTokenBalance(config.wdk.token.address)
+            : Promise.resolve(0n),
+        ])
+        return { native: String(native), token: String(token) }
+      } catch (err) {
+        console.warn(`[wdk] balance read failed: ${(err as Error).message}`)
+        return { native: '0', token: '0' }
+      }
+    },
   }
 }
 
@@ -144,6 +162,12 @@ function simulatedWallet(walletIndex: number): PartyWallet {
     },
     async anchor() {
       return { hash: fakeHash() }
+    },
+    async balances() {
+      // Deterministic per party, so the demo shows the same figures every run.
+      const native = BigInt(Math.round((1.4 + walletIndex * 2.41) * 1e18))
+      const token = BigInt(Math.round((93_420 - walletIndex * 41_180) * 10 ** config.wdk.token.decimals))
+      return { native: String(native), token: String(token) }
     },
   }
 }

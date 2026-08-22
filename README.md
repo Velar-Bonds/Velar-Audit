@@ -100,6 +100,42 @@ flowchart TD
 
 ---
 
+## Interfaz
+
+Cuatro vistas, con barra lateral fija y navegación por rol:
+
+| Vista | Qué muestra |
+|---|---|
+| **Resumen** | KPIs, actividad de 7 días, distribución por estado, flujo de verificación de 6 pasos, últimas donaciones |
+| **Donaciones** | Listado filtrable con tabs por estado, búsqueda y paginación; detalle con línea de tiempo de 5 pasos |
+| **Cumplimiento** | Estado del agente QVAC, cola de "requiere atención" ordenada por riesgo, panel lateral de revisión |
+| **Billeteras** | Saldos por partido con su índice de derivación, y el diagrama de evidencia sin exposición |
+
+### Tres decisiones deliberadas, sin CDN
+
+Nada en la interfaz se descarga de un tercero en tiempo de ejecución. En un
+hackathon el wifi del venue es el adversario, y un dashboard que depende de
+`fonts.googleapis.com` o `cdn.jsdelivr.net` puede aparecer en blanco frente al
+jurado.
+
+- **Poppins autoalojada** en `web/fonts/` (4 pesos, 32 KB en total) en vez de Google Fonts.
+- **Gráficos dibujados en SVG a mano** (`web/charts.js`, ~120 líneas) en vez de Recharts, que
+  habría traído React y un paso de build entre editar y ver.
+- **Iconos en línea** (`web/icons.js`) en vez de un paquete de Lucide.
+
+La animación del flujo es CSS y respeta `prefers-reduced-motion`.
+
+### Lo que la interfaz no inventa
+
+El diseño original pedía mostrar un porcentaje de confianza del modelo. No
+existe tal número en este sistema, y fabricarlo para que se viera bien sería
+exactamente la clase de dato que un jurado pide verificar. En su lugar cada
+donación muestra **qué motor la evaluó** y **cuántas reglas se le aplicaron**.
+Todas las cifras del dashboard salen de donaciones reales que pasaron por el
+pipeline.
+
+---
+
 ## Quién ve qué
 
 | | TSE | Partido |
@@ -242,8 +278,13 @@ src/
   auth/routes.ts                 login / logout / me
   seed.ts                        partidos y cuentas de demo
   server.ts                      API HTTP
-  demo.ts                        el escenario de cuatro donaciones
-web/index.html                   dashboard
+  demo.ts                        escenario de demo + 14 días de historial
+web/index.html                   shell
+web/app.js                       router, vistas y estado
+web/app.css                      sistema de diseño
+web/charts.js                    gráficos en SVG
+web/icons.js                     iconos en línea
+web/fonts/                       Poppins autoalojada
 ```
 
 ## Comandos

@@ -14,7 +14,14 @@ import type { AuthedRequest } from './auth/middleware.ts'
 const app = express()
 app.use(express.json())
 app.use(authenticate)
-app.use(express.static('web'))
+/*
+ * Always revalidate. The browser happily serves a stale app.css from memory
+ * cache, which during a live edit session reads as "my change did nothing".
+ * A 304 costs a round trip and nothing else.
+ */
+app.use(express.static('web', { etag: true, maxAge: 0, setHeaders: (res) => {
+  res.setHeader('Cache-Control', 'no-cache')
+} }))
 
 const wrap = (fn: express.RequestHandler): express.RequestHandler => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next)
@@ -66,7 +73,14 @@ app.get('/api/wallet', requireAuth, wrap(async (req: AuthedRequest, res) => {
   const walletsByParty = await Promise.all(
     parties.map(async (party) => {
       const wallet = await getPartyWallet(party.walletIndex)
-      return { partyId: party.id, partyName: party.name, code: party.code, address: wallet.address }
+      return {
+        partyId: party.id,
+        partyName: party.name,
+        code: party.code,
+        address: wallet.address,
+        walletIndex: party.walletIndex,
+        balances: await wallet.balances(),
+      }
     }),
   )
 
