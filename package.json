@@ -1,0 +1,31 @@
+{
+  "name": "velar-audit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "description": "Donation auditability for political financing — Aleph Hackathon 2026 (WDK + QVAC)",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "wallet:new": "tsx src/scripts/new-wallet.ts",
+    "donate:sim": "tsx src/scripts/simulate-donation.ts",
+    "qvac:pull": "tsx src/scripts/pull-model.ts"
+  },
+  "dependencies": {
+    "@qvac/sdk": "^0.17.1",
+    "@tetherto/wdk": "^1.0.0-beta.16",
+    "@tetherto/wdk-wallet-evm": "^1.0.0-beta.17",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.2.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
+  }
+}
