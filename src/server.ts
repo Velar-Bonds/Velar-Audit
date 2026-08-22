@@ -1,4 +1,5 @@
 import express from 'express'
+import QRCode from 'qrcode'
 import { config } from './config.ts'
 import { store } from './store.ts'
 import { getPartyWallet } from './wallet/wdk.ts'
@@ -10,6 +11,11 @@ import { seedIdentity } from './seed.ts'
 import { authRouter } from './auth/routes.ts'
 import { authenticate, requireAuth, requireRole, scopeFor, toSafeUser } from './auth/middleware.ts'
 import type { AuthedRequest } from './auth/middleware.ts'
+
+/** Identificadores de red para los enlaces de pago EIP-681. */
+const CHAIN_IDS: Record<string, number> = {
+  sepolia: 11155111, mainnet: 1, arbitrum: 42161, polygon: 137,
+}
 
 const app = express()
 app.use(express.json())
@@ -53,6 +59,57 @@ function donationForUser(req: AuthedRequest, res: express.Response, id: string) 
 // --- Auth ------------------------------------------------------------------
 
 app.use('/api/auth', authRouter)
+
+// --- Público ---------------------------------------------------------------
+
+/*
+ * Estos dos endpoints no piden sesión, y no deben pedirla.
+ *
+ * La dirección de donación de un partido es información pública por
+ * definición: si hiciera falta una cuenta para verla, el sistema estaría
+ * decidiendo quién puede donar, que es precisamente el papel que no le
+ * corresponde. Solo se exponen datos que ya están en la cadena.
+ */
+app.get('/api/public/parties', wrap(async (_req, res) => {
+  const parties = await Promise.all(
+    store.parties().map(async (party) => {
+      const wallet = await getPartyWallet(party.walletIndex)
+      return { id: party.id, name: party.name, code: party.code, address: wallet.address }
+    }),
+  )
+  res.json({
+    parties,
+    chain: config.wdk.chain,
+    network: config.wdk.network,
+    token: config.wdk.token,
+    demoMode: config.demoMode,
+  })
+}))
+
+/** QR con un enlace de pago EIP-681, para donar desde el teléfono. */
+app.get('/api/public/qr/:partyId.svg', wrap(async (req, res) => {
+  const party = store.party(String(req.params.partyId))
+  if (!party) return res.status(404).send('Partido desconocido')
+
+  const wallet = await getPartyWallet(party.walletIndex)
+
+  /*
+   * EIP-681. Apunta al contrato del token y codifica una llamada a transfer(),
+   * de modo que la billetera del donante abra ya rellenada con el destinatario
+   * correcto en la red correcta. Sin monto: lo decide quien dona.
+   */
+  const uri = config.wdk.token.address
+    ? `ethereum:${config.wdk.token.address}@${CHAIN_IDS[config.wdk.network] ?? 11155111}/transfer?address=${wallet.address}`
+    : `ethereum:${wallet.address}@${CHAIN_IDS[config.wdk.network] ?? 11155111}`
+
+  const svg = await QRCode.toString(uri, {
+    type: 'svg', errorCorrectionLevel: 'M', margin: 1,
+    color: { dark: '#0c2d4a', light: '#ffffff' },
+  })
+
+  res.type('image/svg+xml').setHeader('Cache-Control', 'no-cache')
+  res.send(svg)
+}))
 
 // --- Read ------------------------------------------------------------------
 
@@ -117,6 +174,83 @@ app.get('/api/audit', requireAuth, (req: AuthedRequest, res) => {
         donorCapUsd: config.compliance.donorCapUsd,
         cureWindowHours: config.compliance.cureWindowMs / 3_600_000,
       },
+    },
+  })
+})
+
+/**
+ * Evidence certificate for one donation.
+ *
+ * Built on the server from anchored evidence, so what an observer downloads is
+ * the same artefact the tribunal would verify — not a rendering assembled by
+ * the browser. It carries no donor identity: a certificate that leaked one
+ * would defeat the reason the system hashes anything at all.
+ */
+app.get('/api/audit/certificate/:id', requireRole('tse'), (req, res) => {
+  const donation = store.donation(String(req.params.id))
+  if (!donation) return res.status(404).json({ error: 'Unknown donation' })
+
+  const attestation = store.attestationFor(donation.id)
+  const verdict = store.verdictFor(donation.id)
+  const returnAction = store.returnFor(donation.id)
+  const anchors = store.anchorsFor(donation.id)
+  const party = store.party(donation.partyId)
+
+  res.json({
+    certificate: 'velar-audit-evidence',
+    version: 1,
+    issuedAt: new Date().toISOString(),
+
+    donation: {
+      reference: donation.id,
+      party: party?.name ?? donation.partyId,
+      amount: donation.amountDecimal,
+      asset: donation.asset,
+      chain: donation.chain,
+      transactionHash: donation.txHash,
+      block: donation.blockNumber,
+      receivedAt: new Date(donation.receivedAt).toISOString(),
+    },
+
+    // Non-identifying fields only. The donor reference is pseudonymous and the
+    // hash is what makes the attestation checkable without revealing it.
+    attestation: attestation && {
+      hash: attestation.hash,
+      provider: attestation.providerId,
+      donorCountry: attestation.donorCountry,
+      sourceOfFunds: attestation.sourceOfFunds,
+      identityVerified: attestation.kycVerified,
+      issuedAt: new Date(attestation.issuedAt).toISOString(),
+    },
+
+    compliance: verdict && {
+      status: verdict.status,
+      engine: verdict.engine,
+      rulesApplied: verdict.findings.map((f) => f.code),
+      assessedAt: new Date(verdict.evaluatedAt).toISOString(),
+    },
+
+    return: returnAction && {
+      status: returnAction.status,
+      reason: returnAction.reason,
+      refundTransaction: returnAction.refundTxRef,
+      executedAt: returnAction.executedAt && new Date(returnAction.executedAt).toISOString(),
+    },
+
+    anchors: anchors.map((a) => ({
+      kind: a.kind,
+      subjectHash: a.subjectHash,
+      transaction: a.txRef,
+      chain: a.chain,
+      anchoredAt: new Date(a.anchoredAt).toISOString(),
+      // Never presented as real. An observer must be able to tell a simulated
+      // anchor from one a chain actually accepted.
+      simulated: a.simulated,
+    })),
+
+    verification: {
+      note: 'Recompute SHA-256 over the canonical attestation payload and compare '
+        + 'it with subjectHash. No personal data is included in this certificate.',
     },
   })
 })

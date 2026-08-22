@@ -1,6 +1,6 @@
 import { areaChart, donutChart } from './charts.js'
 
-/* ══ Estado ════════════════════════════════════════════════════════════════ */
+/* ══ State ═════════════════════════════════════════════════════════════════ */
 
 const state = {
   me: null,
@@ -16,36 +16,26 @@ const state = {
 const PER_PAGE = 20
 const root = document.getElementById('root')
 
-/* ══ Utilidades ════════════════════════════════════════════════════════════ */
+/* ══ Helpers ═══════════════════════════════════════════════════════════════ */
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 
-const money = (n) => Number(n).toLocaleString('es-CR', { maximumFractionDigits: 0 })
-const money2 = (n) => Number(n).toLocaleString('es-CR', { maximumFractionDigits: 2 })
+const money = (n) => Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 })
+const money2 = (n) => Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 })
 const pct = (n, d) => (d === 0 ? 0 : Math.round((n / d) * 1000) / 10)
 
-const shortHash = (h) => (!h ? 'ninguno' : h.length > 16 ? `${h.slice(0, 8)}…${h.slice(-4)}` : h)
+const shortHash = (h) => (!h ? 'none' : h.length > 16 ? `${h.slice(0, 8)}…${h.slice(-4)}` : h)
 
-/**
- * Fechas en el formato que pide la guía de estilo: día, mes escrito y año,
- * sin abreviaturas que obliguen a descifrar.
- */
-const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-  'julio', 'agosto', 'setiembre', 'octubre', 'noviembre', 'diciembre']
+const longDate = (ms) =>
+  new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 
-function longDate(ms) {
+const dateTime = (ms) => {
   const d = new Date(ms)
-  return `${d.getDate()} de ${MONTHS[d.getMonth()]} de ${d.getFullYear()}`
-}
-function dateTime(ms) {
-  const d = new Date(ms)
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${longDate(ms)}, ${hh}:${mm}`
+  return `${longDate(ms)}, ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-/** Referencia estable, derivada del identificador y no de la posición. */
+/** Stable reference, derived from the id rather than from list position. */
 const refOf = (id) => `VA-${String(id).replace(/^don_/, '').slice(0, 6).toUpperCase()}`
 
 function statusOf(row) {
@@ -54,8 +44,8 @@ function statusOf(row) {
 }
 
 const STATUS_LABEL = {
-  verified: 'Verificada', pending: 'Pendiente', non_compliant: 'No conforme',
-  returned: 'Devuelta', unscored: 'Sin evaluar',
+  verified: 'Verified', pending: 'Pending', non_compliant: 'Non-compliant',
+  returned: 'Returned', unscored: 'Not assessed',
 }
 
 function riskOf(row) {
@@ -83,7 +73,7 @@ async function api(path, options = {}) {
     headers: options.body ? { 'content-type': 'application/json' } : {},
     ...options,
   })
-  if (res.status === 401) { renderLogin(); throw new Error('La sesión ha caducado.') }
+  if (res.status === 401) { renderLogin(); throw new Error('Your session has expired.') }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error ?? `Error ${res.status}`)
@@ -100,12 +90,12 @@ async function refresh() {
   state.wallets = wallets
 }
 
-/* ══ Inicio de sesión ══════════════════════════════════════════════════════ */
+/* ══ Sign in ═══════════════════════════════════════════════════════════════ */
 
 const DEMO_ACCOUNTS = [
-  ['tse@velar.cr', 'Tribunal Supremo de Elecciones'],
-  ['alfa@velar.cr', 'Partido Alfa'],
-  ['beta@velar.cr', 'Partido Beta'],
+  ['tse@velar.cr', 'Electoral tribunal'],
+  ['alfa@velar.cr', 'Alfa Party'],
+  ['beta@velar.cr', 'Beta Party'],
 ]
 
 function renderLogin(error = '') {
@@ -120,43 +110,49 @@ function renderLogin(error = '') {
         <span class="brand-mark">V</span>
         <div>
           <div class="brand-name">Velar Audit</div>
-          <div class="body-s secondary">Auditoría de donaciones</div>
+          <div class="body-s secondary">Donation auditability</div>
         </div>
       </div>
 
       <div class="block">
         ${error ? `
         <div class="error-summary" role="alert" tabindex="-1" id="errorSummary">
-          <h2>Hay un problema</h2>
+          <h2>There is a problem</h2>
           <p>${esc(error)}</p>
         </div>` : ''}
 
-        <h1 class="heading-l">Inicie sesión</h1>
+        <h1 class="heading-l">Sign in</h1>
         <p class="secondary body-s" style="margin:4px 0 24px">
-          Use la cuenta institucional que le asignó su organización.</p>
+          Use the institutional account your organisation issued you.</p>
 
         <div class="field${error ? ' has-error' : ''}">
-          <label for="email">Correo electrónico</label>
+          <label for="email">Email address</label>
           <input class="input" type="email" id="email" autocomplete="username" required>
         </div>
 
         <div class="field${error ? ' has-error' : ''}">
-          <label for="password">Contraseña</label>
+          <label for="password">Password</label>
           <input class="input" type="password" id="password" autocomplete="current-password" required>
         </div>
 
-        <button class="btn block" type="submit" id="loginBtn">Iniciar sesión</button>
+        <button class="btn btn-full" type="submit" id="loginBtn">Sign in</button>
 
         <hr class="rule" style="margin:24px 0 20px">
 
-        <h2 class="heading-s">Cuentas de demostración</h2>
+        <h2 class="heading-s">Demonstration accounts</h2>
         <p class="body-s secondary" style="margin:2px 0 12px">
-          Todas usan la contraseña <span class="mono">velar-demo-2026</span>.</p>
+          All three use the password <span class="mono">velar-demo-2026</span>.</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           ${DEMO_ACCOUNTS.map(([email, label]) =>
             `<button type="button" class="btn secondary sm"
               data-email="${esc(email)}">${esc(label)}</button>`).join('')}
         </div>
+
+        <hr class="rule" style="margin:24px 0 16px">
+        <p class="body-s">
+          Want to donate to a party?
+          <button type="button" class="btn-link" id="goDonate">You do not need an account</button>.
+        </p>
       </div>
     </form>
   </div>`
@@ -169,6 +165,11 @@ function renderLogin(error = '') {
       root.querySelector('#password').value = 'velar-demo-2026'
       root.querySelector('#loginBtn').focus()
     })
+  })
+
+  root.querySelector('#goDonate')?.addEventListener('click', () => {
+    location.hash = '#/donate'
+    renderDonate()
   })
 
   root.querySelector('#loginForm').addEventListener('submit', async (e) => {
@@ -186,7 +187,7 @@ function renderLogin(error = '') {
         }),
       })
       const body = await res.json()
-      if (!res.ok) throw new Error(body.error ?? 'No ha sido posible iniciar sesión.')
+      if (!res.ok) throw new Error(body.error ?? 'Could not sign you in.')
       state.me = body.user
       await start()
     } catch (err) {
@@ -195,39 +196,173 @@ function renderLogin(error = '') {
   })
 }
 
-/* ══ Estructura de la página ═══════════════════════════════════════════════ */
+/* ══ Public donation page ══════════════════════════════════════════════════ */
+
+/**
+ * Reachable without a session, and it should be.
+ *
+ * Someone donating has no reason to hold an account in the system that audits
+ * the party. Only what is already public on-chain is published here: each
+ * party's address and the network it operates on.
+ */
+async function renderDonate() {
+  clearInterval(state.poll)
+  state.poll = null
+
+  let data
+  try {
+    data = await (await fetch('/api/public/parties')).json()
+  } catch {
+    root.innerHTML = '<div class="auth-screen"><p>Could not load this page.</p></div>'
+    return
+  }
+
+  const isTestnet = data.network !== 'mainnet'
+
+  root.innerHTML = `
+  <a href="#main" class="skip-link">Skip to main content</a>
+
+  <div class="navbar">
+    <div class="navbar-inner">
+      <button class="brand-link" data-goto-login aria-label="Velar Audit">
+        <span class="brand-mark">V</span>
+        <span>
+          <span class="brand-name">Velar Audit</span><br>
+          <span class="brand-sub">Supreme Electoral Tribunal of Costa Rica</span>
+        </span>
+      </button>
+      <div class="navbar-right">
+        <button class="btn secondary sm" data-goto-login>Institutional sign in</button>
+      </div>
+    </div>
+  </div>
+
+  <main id="main" class="content" style="max-width:1100px">
+    <div class="view-head">
+      <span class="caption">Donations</span>
+      <h1 class="heading-xl">Donate to a political party</h1>
+      <p class="lede">Donations go straight from your own wallet to the party's. There is no
+        intermediary: neither this system nor any other platform ever holds the money.</p>
+    </div>
+
+    ${isTestnet ? `
+    <div class="warning-text">
+      <span class="mark" aria-hidden="true">!</span>
+      <p><span class="sr">Warning: </span>This runs on <strong>${esc(data.network)}</strong>, a
+        test network. The funds <strong>have no real value</strong>. Do not send mainnet
+        ${esc(data.token.symbol)} to these addresses — it would be lost.</p>
+    </div>` : ''}
+
+    <div class="cols ${data.parties.length > 1 ? 'halves' : ''}" style="margin-bottom:32px">
+      ${data.parties.map((party) => `
+        <div class="wallet">
+          <div class="sub">Political party</div>
+          <h2 class="heading-l" style="margin-bottom:16px">${esc(party.name)}</h2>
+
+          <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+            <img src="/api/public/qr/${esc(party.id)}.svg" width="150" height="150"
+              alt="QR code holding the donation address for ${esc(party.name)}"
+              style="border:1px solid var(--border);border-radius:8px;background:#fff">
+
+            <div style="flex:1;min-width:15em">
+              <p class="body-s secondary" style="margin-bottom:8px">
+                Scan it with a mobile wallet, or copy the address.</p>
+              <div class="addr" style="margin-top:0">
+                <code>${esc(party.address)}</code>
+                <button class="btn secondary sm" data-copy="${esc(party.address)}">Copy</button>
+              </div>
+            </div>
+          </div>
+
+          ${summaryList([
+            ['Network', `${esc(data.chain)}, ${esc(data.network)}`],
+            ['Accepted currency', esc(data.token.symbol)],
+            ['Token contract', `<span class="mono">${esc(data.token.address || 'native currency')}</span>`],
+          ])}
+        </div>`).join('')}
+    </div>
+
+    <div class="block">
+      <h2 class="heading-m">What happens after you donate</h2>
+      <p class="caption">Every step is recorded, and anyone can check it.</p>
+      <ol class="flow">
+        ${[
+          ['Your donation reaches the chain', 'The indexer detects and records it automatically. The party cannot leave it out.'],
+          ['An attestation is requested', 'An external provider verifies identity and source of funds. Your personal data never enters this system.'],
+          ['Compliance is assessed', 'Deterministic rules check nationality, the annual cap and the declared source.'],
+          ['The evidence is anchored', 'Hash, timestamp and transaction reference, verifiable by the electoral tribunal.'],
+        ].map(([t, d], i) => `
+          <li class="flow-step">
+            <div class="n">${i + 1}</div>
+            <div class="t">${t}</div>
+            <div class="d">${d}</div>
+          </li>`).join('')}
+      </ol>
+
+      <div class="inset">
+        <p>If a donation turns out to be non-compliant — for example if it comes from abroad,
+        which is illegal in Costa Rica — the system flags it for return and the refund goes
+        back to the address it came from.</p>
+      </div>
+    </div>
+  </main>
+
+  <div class="content body-s secondary" style="max-width:1100px;padding-top:0">
+    <p>Velar Audit — donation auditability for political financing. Donors' personal data is
+      stored neither in this system nor on the blockchain.</p>
+  </div>`
+
+  root.querySelectorAll('[data-goto-login]').forEach((el) =>
+    el.addEventListener('click', () => { location.hash = ''; renderLogin() }))
+
+  root.querySelectorAll('[data-copy]').forEach((el) =>
+    el.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(el.dataset.copy)
+        toast('Wallet address copied.')
+      } catch {
+        toast('Could not copy the address.')
+      }
+    }))
+}
+
+/* ══ Page shell ════════════════════════════════════════════════════════════ */
 
 const NAV = [
-  { route: 'dashboard', label: 'Resumen' },
-  { route: 'donations', label: 'Donaciones', count: () => state.summary?.count },
-  { route: 'compliance', label: 'Cumplimiento', count: () => attentionRows().length },
-  { route: 'wallets', label: 'Billeteras', count: () => state.wallets?.wallets.length },
+  { route: 'dashboard', label: 'Overview' },
+  { route: 'donations', label: 'Donations', count: () => state.summary?.count },
+  { route: 'compliance', label: 'Compliance', count: () => attentionRows().length },
+  { route: 'wallets', label: 'Wallets', count: () => state.wallets?.wallets.length },
+  // Only the tribunal gets the audit surface; a party inspecting itself is not
+  // an audit, and the view exists to be read by someone other than the audited.
+  { route: 'audit', label: 'Audit view', tseOnly: true },
 ]
 
 const CRUMBS = {
-  dashboard: [['Resumen', null]],
-  donations: [['Donaciones', null]],
-  detail: [['Donaciones', 'donations'], ['Detalle de la donación', null]],
-  compliance: [['Cumplimiento', null]],
-  wallets: [['Billeteras', null]],
+  dashboard: [['Overview', null]],
+  donations: [['Donations', null]],
+  detail: [['Donations', 'donations'], ['Donation detail', null]],
+  compliance: [['Compliance', null]],
+  wallets: [['Wallets', null]],
+  audit: [['Audit view', null]],
 }
 
 function renderShell(view, body) {
   const me = state.me
-  const org = me.role === 'tse' ? 'Tribunal Supremo de Elecciones' : (me.partyName ?? 'Partido')
+  const org = me.role === 'tse' ? 'Supreme Electoral Tribunal' : (me.partyName ?? 'Political party')
   const crumbs = CRUMBS[view] ?? CRUMBS.dashboard
   const initials = me.email.slice(0, 2).toUpperCase()
 
   root.innerHTML = `
-  <a href="#main" class="skip-link">Saltar al contenido principal</a>
+  <a href="#main" class="skip-link">Skip to main content</a>
 
   <div class="navbar">
     <div class="navbar-inner">
-      <button class="brand-link" data-route="dashboard" aria-label="Velar Audit, ir al resumen">
+      <button class="brand-link" data-route="dashboard" aria-label="Velar Audit, go to overview">
         <span class="brand-mark">V</span>
         <span>
           <span class="brand-name">Velar Audit</span><br>
-          <span class="brand-sub">Tribunal Supremo de Elecciones</span>
+          <span class="brand-sub">Supreme Electoral Tribunal of Costa Rica</span>
         </span>
       </button>
 
@@ -235,7 +370,7 @@ function renderShell(view, body) {
         <span class="navbar-env">
           <span class="dot ${state.wallets?.demoMode ? '' : 'live'}"
             ${state.wallets?.demoMode ? 'style="background:var(--blue-300)"' : ''}></span>
-          ${state.wallets?.demoMode ? 'Modo demostración' : 'WDK y análisis local'}
+          ${state.wallets?.demoMode ? 'Demonstration mode' : 'Live — WDK and local analysis'}
         </span>
         <span class="navbar-user">
           <span class="who">
@@ -244,50 +379,47 @@ function renderShell(view, body) {
           </span>
           <span class="avatar" aria-hidden="true">${esc(initials)}</span>
         </span>
-        <button class="btn secondary sm" id="logout">Cerrar sesión</button>
+        <button class="btn secondary sm" id="logout">Sign out</button>
       </div>
     </div>
   </div>
 
-  <div class="shell">
-    <aside class="sidebar">
-      <nav class="nav" aria-label="Menú principal">
-        <div class="nav-label">Supervisión</div>
-        ${NAV.map((item) => {
-          const active = view === item.route || (view === 'detail' && item.route === 'donations')
-          const count = item.count?.()
-          return `<button class="nav-item" data-route="${item.route}"
-            ${active ? 'aria-current="page"' : ''}>
-            <span>${item.label}</span>
-            ${count != null ? `<span class="nav-count">${count}</span>` : ''}
-          </button>`
-        }).join('')}
-      </nav>
-    </aside>
-
-    <div class="main">
-      <header class="topbar">
-        <nav class="breadcrumbs" aria-label="Ruta de navegación">
-          <ol>
-            <li><button data-route="dashboard">Inicio</button></li>
-            ${crumbs.map(([label, route]) =>
-              `<li>${route
-                ? `<button data-route="${route}">${esc(label)}</button>`
-                : `<span aria-current="page">${esc(label)}</span>`}</li>`).join('')}
-          </ol>
-        </nav>
-      </header>
-
-      <div class="phase-banner">
-        <strong class="tag returned">Beta</strong>
-        <span>Servicio en construcción para el Tribunal Supremo de Elecciones.
-          ${state.wallets?.demoMode
-            ? 'Ahora mismo funciona con una cadena simulada.'
-            : 'Conectado a la red de pruebas, con análisis local.'}</span>
-      </div>
-
-      <main id="main" class="content">${body}</main>
+  <nav class="section-nav" aria-label="Sections">
+    <div class="inner">
+      ${NAV.filter((item) => !item.tseOnly || me.role === 'tse').map((item) => {
+        const active = view === item.route || (view === 'detail' && item.route === 'donations')
+        const count = item.count?.()
+        return `<button class="nav-item" data-route="${item.route}"
+          ${active ? 'aria-current="page"' : ''}>
+          <span>${item.label}</span>
+          ${count != null ? `<span class="nav-count">${count}</span>` : ''}
+        </button>`
+      }).join('')}
     </div>
+  </nav>
+
+  <div class="shell">
+    <header class="topbar">
+      <nav class="breadcrumbs" aria-label="Breadcrumb">
+        <ol>
+          <li><button data-route="dashboard">Home</button></li>
+          ${crumbs.map(([label, route]) =>
+            `<li>${route
+              ? `<button data-route="${route}">${esc(label)}</button>`
+              : `<span aria-current="page">${esc(label)}</span>`}</li>`).join('')}
+        </ol>
+      </nav>
+    </header>
+
+    <div class="phase-banner">
+      <strong class="tag returned">Beta</strong>
+      <span>A service being built for the Supreme Electoral Tribunal of Costa Rica.
+        ${state.wallets?.demoMode
+          ? 'It is currently running against a simulated chain.'
+          : 'Connected to the test network, with local analysis.'}</span>
+    </div>
+
+    <main id="main" class="content">${body}</main>
   </div>
 
   ${state.drawer ? renderDrawer(state.drawer) : ''}`
@@ -300,7 +432,7 @@ function renderShell(view, body) {
   wireView(view)
 }
 
-/* ══ Resumen ═══════════════════════════════════════════════════════════════ */
+/* ══ Overview ══════════════════════════════════════════════════════════════ */
 
 function activitySeries(days = 7) {
   const DAY = 86_400_000
@@ -314,7 +446,7 @@ function activitySeries(days = 7) {
   }
 
   return [...buckets].map(([day, value]) => ({
-    label: new Date(day).toLocaleDateString('es-CR', { weekday: 'short' }).replace('.', ''),
+    label: new Date(day).toLocaleDateString('en-US', { weekday: 'short' }),
     value,
   }))
 }
@@ -333,12 +465,12 @@ function periodChange(days = 7) {
 }
 
 const FLOW_STEPS = [
-  ['La persona donante envía el dinero', 'A la billetera del partido, sin intermediarios.'],
-  ['La billetera del partido lo recibe', 'Construida con WDK, bajo custodia del propio partido.'],
-  ['El indexador lo registra', 'Lee la cadena directamente. El partido no se autorreporta.'],
-  ['Se vincula la atestación', 'Solo el hash. Los datos personales no entran al sistema.'],
-  ['Se evalúa el cumplimiento', 'Reglas deterministas, explicadas por un modelo local.'],
-  ['Se ancla la evidencia', 'Hash, fecha y referencia de transacción, en la cadena.'],
+  ['The donor sends the money', 'Straight to the party wallet, with no intermediary.'],
+  ['The party wallet receives it', 'Built with WDK, held in the party’s own custody.'],
+  ['The indexer records it', 'It reads the chain directly. The party does not self-report.'],
+  ['An attestation is linked', 'Only the hash. Personal data never enters the system.'],
+  ['Compliance is assessed', 'Deterministic rules, explained by a local model.'],
+  ['The evidence is anchored', 'Hash, timestamp and transaction reference, on-chain.'],
 ]
 
 function viewDashboard() {
@@ -347,65 +479,65 @@ function viewDashboard() {
   const scored = s.verified + s.pending + s.non_compliant
 
   const donutSlices = [
-    { label: 'Verificadas', value: s.verified, color: '#0f7a52' },
-    { label: 'Pendientes', value: s.pending, color: '#d97b00' },
-    { label: 'No conformes', value: s.non_compliant, color: '#ca3535' },
+    { label: 'Verified', value: s.verified, color: '#0f7a52' },
+    { label: 'Pending', value: s.pending, color: '#b56a00' },
+    { label: 'Non-compliant', value: s.non_compliant, color: '#ca3535' },
   ]
 
   return `
   <div class="view-head">
     <span class="caption">${esc(state.me.role === 'tse'
-      ? 'Todos los partidos' : (state.me.partyName ?? ''))}</span>
-    <h1 class="heading-xl">Auditoría de donaciones</h1>
-    <p class="lede">Cada donación queda registrada desde que llega hasta que se verifica,
-      se marca o se devuelve. La evidencia es pública y verificable; la identidad de quien
-      dona, no.</p>
+      ? 'All political parties' : (state.me.partyName ?? ''))}</span>
+    <h1 class="heading-xl">Donation auditability</h1>
+    <p class="lede">Every donation is recorded from the moment it arrives until it is
+      verified, flagged or returned. The evidence is public and verifiable; the identity of
+      the person who donated is not.</p>
     <div class="actions">
-      <button class="btn secondary" data-route="donations">Ver todas las donaciones</button>
-      <button class="btn secondary" data-route="compliance">Revisar cumplimiento</button>
+      <button class="btn secondary" data-route="donations">View all donations</button>
+      <button class="btn secondary" data-route="compliance">Review compliance</button>
       ${state.me.role === 'tse'
-        ? '<button class="btn" id="runDemo">Recargar datos de demostración</button>' : ''}
+        ? '<button class="btn" id="runDemo">Reload demonstration data</button>' : ''}
     </div>
   </div>
 
   <div class="stack">
-    <section aria-label="Cifras principales">
+    <section aria-label="Headline figures">
       <ul class="stats">
         <li class="stat">
-          <div class="k">Total recibido</div>
+          <div class="k">Total received</div>
           <div class="v">${money(s.totalDecimal)}</div>
           <div class="n">${change === null
-            ? `${s.count} donaciones en total`
-            : `${change >= 0 ? 'Sube' : 'Baja'} ${Math.abs(change)}% respecto de la semana anterior`}</div>
+            ? `${s.count} donations in total`
+            : `${change >= 0 ? 'Up' : 'Down'} ${Math.abs(change)}% on the previous week`}</div>
         </li>
         <li class="stat ok">
-          <div class="k">Verificadas</div>
+          <div class="k">Verified</div>
           <div class="v">${pct(s.verified, scored)}%</div>
-          <div class="n">${s.verified} de ${scored} donaciones evaluadas</div>
+          <div class="n">${s.verified} of ${scored} assessed donations</div>
         </li>
         <li class="stat warn">
-          <div class="k">Pendientes de revisión</div>
+          <div class="k">Awaiting review</div>
           <div class="v">${s.pending}</div>
-          <div class="n">Esperan la atestación del proveedor</div>
+          <div class="n">Waiting on the provider's attestation</div>
         </li>
         <li class="stat err">
-          <div class="k">No conformes</div>
+          <div class="k">Non-compliant</div>
           <div class="v">${s.non_compliant}</div>
-          <div class="n">Deben devolverse dentro del plazo</div>
+          <div class="n">Must be returned within the cure window</div>
         </li>
       </ul>
     </section>
 
     <section class="cols two-thirds">
       <div class="block">
-        <h2 class="heading-m">Actividad de los últimos 7 días</h2>
-        <p class="caption">Monto recibido por día, en USDC.</p>
+        <h2 class="heading-m">Activity over the last 7 days</h2>
+        <p class="caption">Amount received per day, in USDC.</p>
         ${areaChart(activitySeries())}
       </div>
 
       <div class="block">
-        <h2 class="heading-m">Estado de cumplimiento</h2>
-        <p class="caption">Proporción de donaciones evaluadas.</p>
+        <h2 class="heading-m">Compliance status</h2>
+        <p class="caption">Share of assessed donations.</p>
         ${donutChart(donutSlices)}
         <ul class="legend">
           ${donutSlices.map((slice) => `
@@ -419,9 +551,9 @@ function viewDashboard() {
     </section>
 
     <section>
-      <h2 class="heading-l">Cómo se verifica una donación</h2>
-      <p class="secondary" style="margin:10px 0 25px">Cada paso deja un hash anclado en la
-        cadena de bloques, de manera que la secuencia completa puede reconstruirse después.</p>
+      <h2 class="heading-l">How a donation is verified</h2>
+      <p class="secondary" style="margin:8px 0 20px">Each step leaves a hash anchored on the
+        blockchain, so the whole sequence can be reconstructed afterwards.</p>
       <ol class="flow">
         ${FLOW_STEPS.map(([title, desc], i) => `
           <li class="flow-step">
@@ -433,42 +565,42 @@ function viewDashboard() {
     </section>
 
     <section>
-      <h2 class="heading-l" style="margin-bottom:16px">Donaciones recientes</h2>
+      <h2 class="heading-l" style="margin-bottom:16px">Recent donations</h2>
       <div class="table-card">
         ${donationTable(state.rows.slice(0, 8), { compact: true })}
         <div class="pager">
-          <span>Se muestran las 8 más recientes</span>
-          <button class="btn-link" data-route="donations">Ver las ${s.count} donaciones</button>
+          <span>Showing the 8 most recent</span>
+          <button class="btn-link" data-route="donations">View all ${s.count} donations</button>
         </div>
       </div>
     </section>
   </div>`
 }
 
-/* ══ Tabla de donaciones ═══════════════════════════════════════════════════ */
+/* ══ Donation table ════════════════════════════════════════════════════════ */
 
 function donationTable(rows, { compact = false } = {}) {
   const showParty = state.me.role === 'tse'
 
   if (rows.length === 0) {
-    return `<p class="empty">No hay donaciones que coincidan con los filtros aplicados.</p>`
+    return `<p class="empty">No donations match the filters you have applied.</p>`
   }
 
   return `
   <div class="table-wrap">
     <table>
-      <caption class="sr">Listado de donaciones</caption>
+      <caption class="sr">Donations</caption>
       <thead>
         <tr>
-          <th scope="col">Referencia</th>
-          ${showParty ? '<th scope="col">Partido</th>' : ''}
-          <th scope="col" class="num">Monto</th>
-          <th scope="col">Activo</th>
-          ${compact ? '' : '<th scope="col">País</th>'}
-          <th scope="col">Atestación</th>
-          <th scope="col">Estado</th>
-          <th scope="col">Recibida</th>
-          <th scope="col"><span class="sr">Acciones</span></th>
+          <th scope="col">Reference</th>
+          ${showParty ? '<th scope="col">Party</th>' : ''}
+          <th scope="col" class="num">Amount</th>
+          <th scope="col">Asset</th>
+          ${compact ? '' : '<th scope="col">Country</th>'}
+          <th scope="col">Attestation</th>
+          <th scope="col">Status</th>
+          <th scope="col">Received</th>
+          <th scope="col"><span class="sr">Actions</span></th>
         </tr>
       </thead>
       <tbody>
@@ -477,16 +609,16 @@ function donationTable(rows, { compact = false } = {}) {
           const status = statusOf(row)
           return `
           <tr>
-            <th scope="row" style="font-weight:700">${esc(refOf(d.id))}</th>
+            <th scope="row" style="font-weight:600">${esc(refOf(d.id))}</th>
             ${showParty ? `<td>${esc(state.parties[d.partyId] ?? d.partyId)}</td>` : ''}
             <td class="num">${money2(d.amountDecimal)}</td>
             <td>${esc(d.asset)}</td>
-            ${compact ? '' : `<td>${row.attestation ? esc(row.attestation.donorCountry) : 'Sin dato'}</td>`}
-            <td class="mono">${row.attestation ? esc(shortHash(row.attestation.hash)) : 'Pendiente'}</td>
+            ${compact ? '' : `<td>${row.attestation ? esc(row.attestation.donorCountry) : 'No data'}</td>`}
+            <td class="mono">${row.attestation ? esc(shortHash(row.attestation.hash)) : 'Pending'}</td>
             <td><strong class="tag ${status}">${STATUS_LABEL[status]}</strong></td>
             <td class="nowrap">${esc(longDate(d.receivedAt))}</td>
-            <td><button class="btn-link" data-donation="${esc(d.id)}">Ver detalle<span class="sr">
-              de la donación ${esc(refOf(d.id))}</span></button></td>
+            <td><button class="btn-link" data-donation="${esc(d.id)}">View<span class="sr">
+              donation ${esc(refOf(d.id))}</span></button></td>
           </tr>`
         }).join('')}
       </tbody>
@@ -494,7 +626,7 @@ function donationTable(rows, { compact = false } = {}) {
   </div>`
 }
 
-/* ══ Donaciones ════════════════════════════════════════════════════════════ */
+/* ══ Donations ═════════════════════════════════════════════════════════════ */
 
 function filteredRows() {
   const { q, status, asset } = state.filters
@@ -525,16 +657,16 @@ function viewDonations() {
   const slice = rows.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
   const TABS = [
-    ['all', 'Todas'], ['verified', 'Verificadas'], ['pending', 'Pendientes'],
-    ['non_compliant', 'No conformes'], ['returned', 'Devueltas'],
+    ['all', 'All'], ['verified', 'Verified'], ['pending', 'Pending'],
+    ['non_compliant', 'Non-compliant'], ['returned', 'Returned'],
   ]
 
   return `
   <div class="view-head">
     <span class="caption">${esc(state.me.role === 'tse'
-      ? 'Todos los partidos' : (state.me.partyName ?? ''))}</span>
-    <h1 class="heading-xl">Donaciones</h1>
-    <p class="lede">Se muestran ${rows.length} de ${state.rows.length} donaciones.</p>
+      ? 'All political parties' : (state.me.partyName ?? ''))}</span>
+    <h1 class="heading-xl">Donations</h1>
+    <p class="lede">Showing ${rows.length} of ${state.rows.length} donations.</p>
   </div>
 
   <div class="table-card">
@@ -546,14 +678,14 @@ function viewDonations() {
 
     <div class="filter-bar">
       <div class="field">
-        <label for="q">Buscar</label>
-        <p class="hint">Por referencia, hash de transacción o dirección de origen.</p>
+        <label for="q">Search</label>
+        <p class="hint">By reference, transaction hash or sending address.</p>
         <input class="input narrow" id="q" type="search" value="${esc(state.filters.q)}">
       </div>
       <div class="field">
-        <label for="assetFilter">Activo</label>
+        <label for="assetFilter">Asset</label>
         <select class="select" id="assetFilter" style="width:auto">
-          <option value="all">Todos</option>
+          <option value="all">All</option>
           ${assets.map((a) => `<option value="${esc(a)}"
             ${state.filters.asset === a ? 'selected' : ''}>${esc(a)}</option>`).join('')}
         </select>
@@ -563,16 +695,16 @@ function viewDonations() {
     ${donationTable(slice)}
 
     <div class="pager">
-      <span>Página ${page} de ${pages}</span>
+      <span>Page ${page} of ${pages}</span>
       <span style="display:flex;gap:8px">
-        <button class="btn secondary sm" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Anterior</button>
-        <button class="btn secondary sm" data-page="${page + 1}" ${page >= pages ? 'disabled' : ''}>Siguiente</button>
+        <button class="btn secondary sm" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>Previous</button>
+        <button class="btn secondary sm" data-page="${page + 1}" ${page >= pages ? 'disabled' : ''}>Next</button>
       </span>
     </div>
   </div>`
 }
 
-/* ══ Detalle de una donación ═══════════════════════════════════════════════ */
+/* ══ Donation detail ═══════════════════════════════════════════════════════ */
 
 function summaryList(entries) {
   const rows = entries.filter(Boolean)
@@ -587,11 +719,11 @@ function viewDetail(id) {
   if (!row) {
     return `
     <div class="view-head">
-      <h1 class="heading-xl">No se ha encontrado la donación</h1>
-      <p class="lede">Esta donación no existe, o pertenece a un partido cuyos datos usted no
-        puede consultar.</p>
+      <h1 class="heading-xl">Donation not found</h1>
+      <p class="lede">This donation does not exist, or it belongs to a party whose records
+        you are not allowed to see.</p>
       <div class="actions">
-        <button class="btn secondary" data-route="donations">Volver a las donaciones</button>
+        <button class="btn secondary" data-route="donations">Back to donations</button>
       </div>
     </div>`
   }
@@ -623,81 +755,81 @@ function viewDetail(id) {
     <p class="lede">${money2(d.amountDecimal)} ${esc(d.asset)} ·
       <strong class="tag ${status}">${STATUS_LABEL[status]}</strong></p>
     <div class="actions">
-      <button class="btn secondary" data-route="donations">Volver</button>
+      <button class="btn secondary" data-route="donations">Back</button>
       ${status === 'non_compliant'
-        ? `<button class="btn warning" data-return="${esc(d.id)}">Iniciar la devolución</button>` : ''}
+        ? `<button class="btn warning" data-return="${esc(d.id)}">Start the return</button>` : ''}
     </div>
   </div>
 
-  <h2 class="heading-l" style="margin-bottom:25px">Trazabilidad</h2>
+  <h2 class="heading-l" style="margin-bottom:24px">Traceability</h2>
 
   <ol class="timeline">
-    ${step('done', 'Donación recibida', dateTime(d.receivedAt), summaryList([
-      ['Monto', `${money2(d.amountDecimal)} ${esc(d.asset)}`],
-      ['Dirección de origen', `<span class="mono">${esc(d.fromAddress)}</span>`],
-      ['Partido receptor', esc(state.parties[d.partyId] ?? d.partyId)],
+    ${step('done', 'Donation received', dateTime(d.receivedAt), summaryList([
+      ['Amount', `${money2(d.amountDecimal)} ${esc(d.asset)}`],
+      ['Sending address', `<span class="mono">${esc(d.fromAddress)}</span>`],
+      ['Receiving party', esc(state.parties[d.partyId] ?? d.partyId)],
     ]))}
 
-    ${step('done', 'Confirmada en la cadena', `Red ${esc(d.chain)}`, summaryList([
-      ['Transacción', `<span class="mono">${esc(d.txHash)}</span>`],
-      ['Bloque', d.blockNumber ? String(d.blockNumber) : 'Simulado en modo demostración'],
+    ${step('done', 'Confirmed on the chain', `${esc(d.chain)} network`, summaryList([
+      ['Transaction', `<span class="mono">${esc(d.txHash)}</span>`],
+      ['Block', d.blockNumber ? String(d.blockNumber) : 'Simulated in demonstration mode'],
     ]))}
 
     ${a
-      ? step('done', 'Atestación vinculada', dateTime(a.issuedAt),
+      ? step('done', 'Attestation linked', dateTime(a.issuedAt),
           summaryList([
-            ['Hash de la atestación', `<span class="mono">${esc(a.hash)}</span>`],
-            ['País de la persona donante', esc(a.donorCountry)],
-            ['Origen de los fondos', esc(a.sourceOfFunds)],
-            ['Identidad verificada', a.kycVerified ? 'Sí' : 'No'],
-            ['Persona expuesta políticamente', a.isPep ? 'Sí' : 'No'],
+            ['Attestation hash', `<span class="mono">${esc(a.hash)}</span>`],
+            ['Donor country', esc(a.donorCountry)],
+            ['Source of funds', esc(a.sourceOfFunds)],
+            ['Identity verified', a.kycVerified ? 'Yes' : 'No'],
+            ['Politically exposed person', a.isPep ? 'Yes' : 'No'],
           ]) +
           `<div class="inset">
-            <p>En la cadena de bloques no se almacena ningún dato personal de la persona
-            donante. Solo se registra el hash de la atestación, que el proveedor puede
-            reproducir para demostrar que el documento no ha cambiado.</p>
+            <p>No personal data about the donor is stored on the blockchain. Only the hash of
+            the attestation, which the provider can recompute to prove the document has not
+            changed.</p>
           </div>`)
-      : step('todo', 'Atestación pendiente',
-          'El proveedor todavía no ha emitido la atestación',
+      : step('todo', 'Attestation pending',
+          'The provider has not issued the attestation yet',
           `<div class="inset warn">
-            <p>Si la atestación no llega dentro del plazo, la donación pasa a considerarse
-            no conforme y debe devolverse.</p>
+            <p>If the attestation does not arrive within the cure window, the donation becomes
+            non-compliant and must be returned.</p>
           </div>`)}
 
-    ${v ? step(v.status === 'non_compliant' ? 'todo' : 'done', 'Análisis de cumplimiento',
+    ${v ? step(v.status === 'non_compliant' ? 'todo' : 'done', 'Compliance assessment',
         dateTime(v.evaluatedAt),
         summaryList([
-          ['Resultado', `<strong class="tag ${v.status}">${STATUS_LABEL[v.status]}</strong>`],
-          ['Motor que decidió', v.engine === 'qvac'
-            ? 'Reglas deterministas, explicadas por el modelo local'
-            : 'Reglas deterministas'],
-          ['Reglas aplicadas', String(v.findings.length)],
+          ['Result', `<strong class="tag ${v.status}">${STATUS_LABEL[v.status]}</strong>`],
+          ['Deciding engine', v.engine === 'qvac'
+            ? 'Deterministic rules, explained by the local model'
+            : 'Deterministic rules'],
+          ['Rules applied', String(v.findings.length)],
         ]) +
         (v.rationale ? `<div class="inset"><p>${esc(v.rationale)}</p></div>` : '') +
         `<ul class="checks">${checks}</ul>`)
       : ''}
 
-    ${step(anchors.length ? 'done' : 'todo', 'Evidencia de auditoría',
-      `${anchors.length} ${anchors.length === 1 ? 'anclaje' : 'anclajes'} en la cadena`,
+    ${step(anchors.length ? 'done' : 'todo', 'Audit evidence',
+      `${anchors.length} ${anchors.length === 1 ? 'anchor' : 'anchors'} on the chain`,
       summaryList([
-        attAnchor && ['Hash de la atestación', `<span class="mono">${esc(attAnchor.subjectHash)}</span>`],
-        verdictAnchor && ['Hash del veredicto', `<span class="mono">${esc(verdictAnchor.subjectHash)}</span>`],
-        returnAnchor && ['Hash de la devolución', `<span class="mono">${esc(returnAnchor.subjectHash)}</span>`],
-        anchors[0] && ['Transacción de anclaje',
+        attAnchor && ['Attestation hash', `<span class="mono">${esc(attAnchor.subjectHash)}</span>`],
+        verdictAnchor && ['Verdict hash', `<span class="mono">${esc(verdictAnchor.subjectHash)}</span>`],
+        returnAnchor && ['Return hash', `<span class="mono">${esc(returnAnchor.subjectHash)}</span>`],
+        anchors[0] && ['Anchoring transaction',
           `<span class="mono">${esc(anchors[0].txRef)}</span>${
-            anchors[0].simulated ? ' (simulada en modo demostración)' : ''}`],
+            anchors[0].simulated ? ' (simulated in demonstration mode)' : ''}`],
       ]))}
 
     ${r?.status === 'returned'
-      ? step('done', 'Devolución ejecutada', dateTime(r.executedAt), summaryList([
-          ['Motivo', esc(r.reason)],
-          ['Transacción del reembolso', `<span class="mono">${esc(r.refundTxRef)}</span>`],
+      ? step('done', 'Return executed', dateTime(r.executedAt), summaryList([
+          ['Reason', esc(r.reason)],
+          ['Refund transaction', `<span class="mono">${esc(r.refundTxRef)}</span>`],
         ]))
       : ''}
   </ol>`
 }
 
-/* ══ Cumplimiento ══════════════════════════════════════════════════════════ */
+/* ══ Compliance ════════════════════════════════════════════════════════════ */
 
 function attentionRows() {
   return state.rows
@@ -720,73 +852,78 @@ function viewCompliance() {
 
   const usedAgent = state.rows.some((r) => r.verdict?.engine === 'qvac')
   const sinceLast = lastVerdict
-    ? `hace ${Math.max(1, Math.round((Date.now() - lastVerdict) / 1000))} segundos`
-    : 'todavía no se ha ejecutado'
+    ? `${Math.max(1, Math.round((Date.now() - lastVerdict) / 1000))}s ago`
+    : 'not run yet'
 
   return `
   <div class="view-head">
-    <h1 class="heading-xl">Cumplimiento</h1>
-    <p class="lede">El análisis se ejecuta en este equipo. Ningún dato de identificación
-      de personas donantes se envía a servicios externos.</p>
+    <span class="caption">Compliance</span>
+    <h1 class="heading-xl">Compliance centre</h1>
+    <p class="lede">Analysis runs on this machine. No donor identification data is sent to
+      any external service.</p>
   </div>
 
   <div class="stack">
-    <section class="block">
-      <h2 class="heading-m">Agente de análisis</h2>
-      <p class="caption">${usedAgent
-        ? 'El modelo local está en funcionamiento.'
-        : 'El modelo local no está disponible. El análisis continúa con las reglas.'}</p>
-
-      ${summaryList([
-        ['Estado', usedAgent
-          ? '<strong class="tag verified">En funcionamiento</strong>'
-          : '<strong class="tag unscored">Solo reglas</strong>'],
-        ['Donaciones procesadas', String(state.rows.length)],
-        ['Último análisis', sinceLast],
-        ['Datos enviados a servicios externos', 'Ninguno'],
-      ])}
-
-      <div class="warning-text">
-        <span class="mark" aria-hidden="true">!</span>
-        <p><span class="sr">Advertencia: </span>El modelo redacta la explicación que lee
-          la persona auditora, pero <strong>no decide si algo es legal</strong>. Esa decisión
-          la toman reglas deterministas, porque un dictamen con consecuencia legal debe poder
-          reproducirlo un regulador.</p>
+    <section class="engine-panel">
+      <div class="engine-head">
+        <div>
+          <h2 class="heading-m">QVAC compliance engine</h2>
+          <p class="engine-sub">Local enforcement node · compliance evaluated on-premise,
+            with zero external cloud exposure.</p>
+        </div>
+        <span class="engine-badge">
+          <span class="dot ${usedAgent ? 'live' : ''}"></span>
+          ${usedAgent ? 'Running locally' : 'Rules only — model unavailable'}
+        </span>
       </div>
 
+      <ul class="engine-metrics">
+        <li><div class="k">Processing mode</div><div class="v">On-premise</div></li>
+        <li><div class="k">Donations processed</div><div class="v">${state.rows.length}</div></li>
+        <li><div class="k">Last assessment</div><div class="v">${sinceLast}</div></li>
+        <li><div class="k">Data sent off-device</div><div class="v">None</div></li>
+      </ul>
+
       <div class="progress" id="analysisBar"><i></i></div>
-      <button class="btn" id="runAnalysis">Volver a analizar las donaciones pendientes</button>
+      <button class="btn" id="runAnalysis">Re-run ruleset evaluation</button>
+    </section>
+
+    <section class="warning-text">
+      <span class="mark" aria-hidden="true">!</span>
+      <p><span class="sr">Warning: </span>The model writes the explanation an auditor reads,
+        but <strong>it does not decide whether something is legal</strong>. That decision is
+        made by deterministic rules, because a ruling with a legal consequence must be
+        reproducible by a regulator.</p>
     </section>
 
     <section>
-      <h2 class="heading-l">Requieren atención</h2>
-      <p class="secondary" style="margin:10px 0 25px">
+      <h2 class="heading-l">Requires immediate action</h2>
+      <p class="secondary" style="margin:8px 0 20px">
         ${attention.length === 0
-          ? 'No hay donaciones pendientes de resolver.'
-          : `${attention.length} ${attention.length === 1 ? 'donación' : 'donaciones'} sin resolver,
-             ordenadas por nivel de riesgo.`}</p>
+          ? 'Nothing outstanding.'
+          : `${attention.length} ${attention.length === 1 ? 'donation' : 'donations'} unresolved,
+             ordered by risk.`}</p>
 
       ${attention.length === 0 ? '' : `
-      <ul class="task-list table-card">
-        ${attention.slice(0, 15).map((row) => {
+      <div class="risk-grid">
+        ${attention.slice(0, 12).map((row) => {
           const risk = riskOf(row)
           const worst = (row.verdict?.findings ?? [])
             .find((f) => f.severity === 'violation') ?? row.verdict?.findings?.[0]
           return `
-          <li>
-            <span class="title">
-              ${esc(refOf(row.donation.id))}<br>
-              <span class="body-s secondary">${money2(row.donation.amountDecimal)}
-                ${esc(row.donation.asset)}</span>
-            </span>
-            <span class="detail">${esc(worst?.message ?? 'Sin hallazgos registrados.')}</span>
-            <strong class="tag ${risk === 'high' ? 'high' : 'medium'}">
-              ${risk === 'high' ? 'Riesgo alto' : 'Riesgo medio'}</strong>
-            <button class="btn-link" data-review="${esc(row.donation.id)}">Revisar<span class="sr">
-              la donación ${esc(refOf(row.donation.id))}</span></button>
-          </li>`
+          <article class="risk-card">
+            <div class="risk-head">
+              <span class="ref">${esc(refOf(row.donation.id))}</span>
+              <strong class="tag ${risk === 'high' ? 'high' : 'medium'}">
+                ${risk === 'high' ? 'High risk' : 'Medium risk'}</strong>
+            </div>
+            <div class="risk-amount">${money2(row.donation.amountDecimal)} ${esc(row.donation.asset)}</div>
+            <div class="risk-party">${esc(state.parties[row.donation.partyId] ?? '')}</div>
+            <p class="risk-why">${esc(worst?.message ?? 'No findings recorded.')}</p>
+            <button class="btn secondary sm" data-review="${esc(row.donation.id)}">Open audit drawer</button>
+          </article>`
         }).join('')}
-      </ul>`}
+      </div>`}
     </section>
   </div>`
 }
@@ -811,65 +948,104 @@ function renderDrawer(id) {
   <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
     <div class="drawer-head">
       <div>
-        <h2 class="heading-m" id="drawerTitle">${esc(refOf(d.id))}</h2>
-        <p class="body-s secondary">${esc(state.parties[d.partyId] ?? d.partyId)}</p>
+        <h2 class="heading-m" id="drawerTitle">Compliance file review</h2>
+        <p class="body-s secondary">${esc(refOf(d.id))} ·
+          ${esc(state.parties[d.partyId] ?? d.partyId)}</p>
       </div>
-      <button class="btn-link" data-close-drawer>Cerrar</button>
+      <button class="btn-link" data-close-drawer>Close</button>
     </div>
 
     <div class="drawer-body">
       <p style="margin-bottom:20px">
         <strong class="tag ${status}">${STATUS_LABEL[status]}</strong>
-        ${risk ? ` <strong class="tag ${risk}">${risk === 'high' ? 'Riesgo alto' : 'Riesgo medio'}</strong>` : ''}
+        ${risk ? ` <strong class="tag ${risk}">${risk === 'high' ? 'High risk' : 'Medium risk'}</strong>` : ''}
       </p>
 
-      <h3 class="heading-s">Donación</h3>
+      <h3 class="heading-s">Donation</h3>
       ${summaryList([
-        ['Monto', `${money2(d.amountDecimal)} ${esc(d.asset)}`],
-        ['Red', esc(d.chain)],
-        ['Origen', `<span class="mono">${esc(shortHash(d.fromAddress))}</span>`],
-        ['Recibida', esc(dateTime(d.receivedAt))],
+        ['Amount', `${money2(d.amountDecimal)} ${esc(d.asset)}`],
+        ['Network', esc(d.chain)],
+        ['Sending address', `<span class="mono">${esc(shortHash(d.fromAddress))}</span>`],
+        ['Received', esc(dateTime(d.receivedAt))],
       ])}
 
-      <h3 class="heading-s" style="margin-top:30px">Atestación</h3>
+      <h3 class="heading-s" style="margin-top:28px">Attestation</h3>
       ${a
         ? summaryList([
-            ['País', esc(a.donorCountry)],
-            ['Identidad verificada', a.kycVerified ? 'Sí' : 'No'],
-            ['Origen de los fondos', esc(a.sourceOfFunds)],
-            ['Persona expuesta políticamente', a.isPep ? 'Sí' : 'No'],
+            ['Country', esc(a.donorCountry)],
+            ['Identity verified', a.kycVerified ? 'Yes' : 'No'],
+            ['Source of funds', esc(a.sourceOfFunds)],
+            ['Politically exposed person', a.isPep ? 'Yes' : 'No'],
           ])
-        : '<p style="margin-top:10px">El proveedor todavía no ha emitido la atestación.</p>'}
+        : '<p style="margin-top:10px">The provider has not issued the attestation yet.</p>'}
 
-      <h3 class="heading-s" style="margin-top:30px">Hallazgos</h3>
+      <h3 class="heading-s" style="margin-top:28px">Findings</h3>
       ${v?.rationale ? `<div class="inset"><p>${esc(v.rationale)}</p></div>` : ''}
       <ul class="checks">${checks}</ul>
+
+      ${summaryList([
+        ['Deciding engine', v?.engine === 'qvac'
+          ? 'Deterministic rules, explained by the local model'
+          : 'Deterministic rules'],
+        ['Rules applied', String(v?.findings.length ?? 0)],
+      ])}
     </div>
 
     <div class="drawer-foot">
-      <button class="btn secondary" data-detail="${esc(d.id)}">Ver detalle completo</button>
-      <button class="btn secondary" data-rescore="${esc(d.id)}">Volver a evaluar</button>
+      <button class="btn secondary" data-detail="${esc(d.id)}">View full file</button>
+      <button class="btn secondary" data-rescore="${esc(d.id)}">Re-evaluate</button>
       ${status === 'non_compliant'
-        ? `<button class="btn warning" data-return="${esc(d.id)}">Devolver</button>` : ''}
+        ? `<button class="btn warning" data-return="${esc(d.id)}">Initiate mandatory return</button>` : ''}
     </div>
   </aside>`
 }
 
-/* ══ Billeteras ════════════════════════════════════════════════════════════ */
+/* ══ Wallets ═══════════════════════════════════════════════════════════════ */
 
 const PRIVATE_ITEMS = [
-  'Identidad de la persona donante',
-  'Documentos de verificación de identidad',
-  'Justificación del origen de los fondos',
-  'Cualquier otro dato personal',
+  'Donor identity',
+  'Identity verification file',
+  'Declared source of funds',
+  'Any other personal data',
 ]
 const PUBLIC_ITEMS = [
-  'Hash de la transacción',
-  'Hash de la atestación',
-  'Resultado del análisis de cumplimiento',
-  'Fecha y hora',
-  'Evidencia de la devolución, si la hubo',
+  'Transaction hash',
+  'Attestation hash',
+  'Compliance result — pass or fail',
+  'Timestamp',
+  'Return evidence, where there was one',
 ]
+
+function privacyDiagram() {
+  return `
+  <div class="privacy">
+    <div class="privacy-col">
+      <h3>Private · off-chain</h3>
+      <p class="cap">Held by the identity verification provider under electoral data
+        protection rules. It never enters this system.</p>
+      <ul class="privacy-list">
+        ${PRIVATE_ITEMS.map((label) => `<li>${label}</li>`).join('')}
+      </ul>
+    </div>
+
+    <div class="transform" aria-hidden="true">
+      <span class="step">Sensitive data</span>
+      <span class="arrow">↓</span>
+      <span class="step mid">SHA-256</span>
+      <span class="arrow">↓</span>
+      <span class="step">Verifiable proof</span>
+    </div>
+
+    <div class="privacy-col on">
+      <h3>Publicly verifiable · on-chain</h3>
+      <p class="cap">Anchored on-chain so anyone can check it, including the electoral
+        tribunal and accredited observers.</p>
+      <ul class="privacy-list">
+        ${PUBLIC_ITEMS.map((label) => `<li>${label}</li>`).join('')}
+      </ul>
+    </div>
+  </div>`
+}
 
 function viewWallets() {
   const w = state.wallets
@@ -877,15 +1053,16 @@ function viewWallets() {
 
   return `
   <div class="view-head">
-    <h1 class="heading-xl">Billeteras</h1>
-    <p class="lede">Cada partido custodia su propia billetera. Ninguna casa de cambio ni
-      custodio se interpone entre quien dona y el partido, de modo que nadie puede mover
-      ni ocultar una donación sin que quede registrada.</p>
+    <span class="caption">Custody</span>
+    <h1 class="heading-xl">Wallets</h1>
+    <p class="lede">Each party holds its own wallet. No exchange or custodian sits between
+      the donor and the party, so nobody can move or hide a donation without it being
+      recorded.</p>
   </div>
 
   <div class="stack">
     <section>
-      <h2 class="heading-l" style="margin-bottom:25px">Billeteras de los partidos</h2>
+      <h2 class="heading-l" style="margin-bottom:20px">Party donation wallets</h2>
       <div class="cols ${w.wallets.length > 1 ? 'halves' : ''}">
         ${w.wallets.map((wallet) => {
           const native = fromBase(wallet.balances?.native, 18)
@@ -894,70 +1071,189 @@ function viewWallets() {
           <div class="wallet">
             <div class="sub">${esc(wallet.partyName)}</div>
             <div class="amount">${money2(token)} ${esc(w.token.symbol)}</div>
-            <div class="sub">${native.toFixed(4)} ETH para comisiones de red</div>
+            <div class="sub">${native.toFixed(4)} ETH for network fees</div>
             <div class="addr">
               <code>${esc(wallet.address)}</code>
-              <button class="btn secondary sm" data-copy="${esc(wallet.address)}">Copiar</button>
+              <button class="btn secondary sm" data-copy="${esc(wallet.address)}">Copy</button>
             </div>
             ${summaryList([
-              ['Estado', '<strong class="tag verified">Activa</strong>'],
-              ['Red', `${esc(w.chain)}, ${esc(w.network)}`],
-              ['Infraestructura', 'Wallet Development Kit (WDK)'],
-              ['Cuenta derivada', `Número ${wallet.walletIndex}`],
+              ['Status', '<strong class="tag verified">Active</strong>'],
+              ['Network', `${esc(w.chain)}, ${esc(w.network)}`],
+              ['Infrastructure', 'Wallet Development Kit (WDK)'],
+              ['Derived account', `Index ${wallet.walletIndex}`],
             ])}
           </div>`
         }).join('')}
       </div>
       <div class="inset">
-        <p>Todas las billeteras se derivan de una misma frase semilla, cada una con su propio
-        número de cuenta. Un despliegue con varios partidos necesita una sola frase y no una
-        por partido, y aun así las donaciones quedan separadas en la cadena.</p>
+        <p>All wallets are derived from a single seed phrase, each with its own account
+        index. A deployment covering many parties needs one seed rather than one per party,
+        and donations still stay separated on-chain.</p>
       </div>
     </section>
 
     <section>
-      <h2 class="heading-l">Evidencia sin exposición</h2>
-      <p class="secondary" style="margin:10px 0 25px">Qué se queda fuera de la cadena de
-        bloques y qué se publica en ella.</p>
-
-      <div class="privacy">
-        <div class="privacy-col">
-          <h3>Privado, fuera de la cadena</h3>
-          <p class="cap">Lo custodia el proveedor de verificación de identidad.
-            Nunca entra a este sistema.</p>
-          <ul class="privacy-list">
-            ${PRIVATE_ITEMS.map((label) => `<li>${label}</li>`).join('')}
-          </ul>
-        </div>
-
-        <div class="transform" aria-hidden="true">
-          <span class="step">Dato sensible</span>
-          <span class="arrow">↓</span>
-          <span class="step mid">SHA-256</span>
-          <span class="arrow">↓</span>
-          <span class="step">Evidencia verificable</span>
-        </div>
-
-        <div class="privacy-col on">
-          <h3>Público y verificable, en la cadena</h3>
-          <p class="cap">Cualquier persona puede comprobarlo, incluido el Tribunal
-            Supremo de Elecciones.</p>
-          <ul class="privacy-list">
-            ${PUBLIC_ITEMS.map((label) => `<li>${label}</li>`).join('')}
-          </ul>
-        </div>
-      </div>
+      <h2 class="heading-l">Evidence without exposure</h2>
+      <p class="secondary" style="margin:8px 0 20px">What stays off the blockchain, and what
+        is published on it.</p>
+      ${privacyDiagram()}
     </section>
   </div>`
 }
 
-/* ══ Enrutado ══════════════════════════════════════════════════════════════ */
+/* ══ Electoral authority audit view ════════════════════════════════════════ */
+
+/**
+ * The tribunal's own read-only surface.
+ *
+ * Everything here is derived from anchored evidence, and nothing on this screen
+ * identifies a donor. That is the point: an observer should be able to check
+ * the arithmetic of a party's financing without being handed its donor list.
+ */
+function viewAudit() {
+  const rows = state.rows
+  const totals = rows.reduce((acc, row) => {
+    const amount = row.donation.amountDecimal
+    acc.declared += amount
+    if (row.anchors.some((a) => !a.simulated)) acc.anchored += amount
+    if (statusOf(row) === 'non_compliant') acc.investigation += amount
+    if (statusOf(row) === 'returned') acc.returned += amount
+    return acc
+  }, { declared: 0, anchored: 0, investigation: 0, returned: 0 })
+
+  const parties = Object.entries(state.parties)
+
+  return `
+  <div class="view-head">
+    <span class="caption">Electoral authority</span>
+    <h1 class="heading-xl">Public audit view</h1>
+    <p class="lede">Independent inspection for the Supreme Electoral Tribunal and accredited
+      observers. Every figure below is derived from anchored evidence.</p>
+    <p style="margin-top:12px">
+      <strong class="tag returned">Read-only · official audit session</strong></p>
+  </div>
+
+  <div class="stack">
+    <section class="filter-card">
+      <div class="filter-bar" style="border:none;padding:0">
+        <div class="field">
+          <label for="auditParty">Political party</label>
+          <select class="select" id="auditParty" style="width:auto">
+            <option value="all">All parties</option>
+            ${parties.map(([id, name]) =>
+              `<option value="${esc(id)}">${esc(name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label for="auditPeriod">Electoral period</label>
+          <select class="select" id="auditPeriod" style="width:auto">
+            <option>2026</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="auditStatus">Compliance level</label>
+          <select class="select" id="auditStatus" style="width:auto">
+            <option value="all">All</option>
+            <option value="verified">Verified</option>
+            <option value="pending">Pending</option>
+            <option value="non_compliant">Non-compliant</option>
+            <option value="returned">Returned</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <section aria-label="Public verification figures">
+      <ul class="stats">
+        <li class="stat">
+          <div class="k">Total declared funds</div>
+          <div class="v">${money(totals.declared)}</div>
+          <div class="n">Across ${parties.length} registered parties</div>
+        </li>
+        <li class="stat ok">
+          <div class="k">Anchored on-chain</div>
+          <div class="v">${money(totals.anchored)}</div>
+          <div class="n">Backed by a real anchoring transaction</div>
+        </li>
+        <li class="stat err">
+          <div class="k">Under investigation</div>
+          <div class="v">${money(totals.investigation)}</div>
+          <div class="n">Flagged as non-compliant</div>
+        </li>
+        <li class="stat">
+          <div class="k">Returned to source</div>
+          <div class="v">${money(totals.returned)}</div>
+          <div class="n">Refunded to the sending address</div>
+        </li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 class="heading-l" style="margin-bottom:16px">Audit evidence matrix</h2>
+      <p class="secondary" style="margin-bottom:16px">The mathematical proof, without any
+        private identity attached to it.</p>
+      <div class="table-card">
+        <div class="table-wrap">
+          <table id="auditTable">
+            <caption class="sr">Cryptographic evidence per donation</caption>
+            <thead>
+              <tr>
+                <th scope="col">File</th>
+                <th scope="col">Receiving party</th>
+                <th scope="col" class="num">Amount</th>
+                <th scope="col">Attestation hash</th>
+                <th scope="col">Legal status</th>
+                <th scope="col">Certificate</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.slice(0, 25).map((row) => {
+                const status = statusOf(row)
+                return `
+                <tr data-party="${esc(row.donation.partyId)}" data-status="${esc(status)}">
+                  <th scope="row" style="font-weight:600">${esc(refOf(row.donation.id))}</th>
+                  <td>${esc(state.parties[row.donation.partyId] ?? '')}</td>
+                  <td class="num">${money2(row.donation.amountDecimal)}</td>
+                  <td class="mono">${row.attestation
+                    ? esc(shortHash(row.attestation.hash)) : 'Not issued'}</td>
+                  <td><strong class="tag ${status}">${STATUS_LABEL[status]}</strong></td>
+                  <td><button class="btn-link" data-cert="${esc(row.donation.id)}">
+                    Download<span class="sr"> certificate for ${esc(refOf(row.donation.id))}</span>
+                  </button></td>
+                </tr>`
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <span>Showing ${Math.min(25, rows.length)} of ${rows.length} files</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="heading-l">Evidence without exposure</h2>
+      <p class="secondary" style="margin:8px 0 20px">How a donation can be publicly proven
+        without publishing who made it.</p>
+      ${privacyDiagram()}
+    </section>
+  </div>`
+}
+
+/* ══ Routing ═══════════════════════════════════════════════════════════════ */
+
+/** The donation page is the only route that does not require a session. */
+function isPublicRoute() {
+  return location.hash.replace(/^#\/?/, '').split('/')[0] === 'donate'
+}
+
+const ROUTES = ['dashboard', 'donations', 'compliance', 'wallets', 'audit']
 
 function currentRoute() {
   const hash = location.hash.replace(/^#\/?/, '')
   const [head, tail] = hash.split('/')
   if (head === 'donations' && tail) return { view: 'detail', id: tail }
-  if (['dashboard', 'donations', 'compliance', 'wallets'].includes(head)) return { view: head }
+  if (ROUTES.includes(head)) return { view: head }
   return { view: 'dashboard' }
 }
 
@@ -966,6 +1262,7 @@ function go(route, id) {
 }
 
 function render() {
+  if (isPublicRoute()) return renderDonate()
   if (!state.me) return renderLogin()
   const { view, id } = currentRoute()
 
@@ -974,12 +1271,13 @@ function render() {
     : view === 'detail' ? viewDetail(id)
     : view === 'compliance' ? viewCompliance()
     : view === 'wallets' ? viewWallets()
+    : view === 'audit' ? viewAudit()
     : viewDashboard()
 
   renderShell(view, body)
 }
 
-/* ══ Eventos ═══════════════════════════════════════════════════════════════ */
+/* ══ Events ════════════════════════════════════════════════════════════════ */
 
 function wireView(view) {
   root.querySelectorAll('[data-route]').forEach((el) =>
@@ -995,9 +1293,9 @@ function wireView(view) {
     el.addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(el.dataset.copy)
-        toast('Se ha copiado la dirección de la billetera.')
+        toast('Wallet address copied.')
       } catch {
-        toast('No ha sido posible copiar la dirección.')
+        toast('Could not copy the address.')
       }
     }))
 
@@ -1006,7 +1304,7 @@ function wireView(view) {
       el.disabled = true
       try {
         await api(`/api/donations/${el.dataset.return}/return`, { method: 'POST' })
-        toast('La devolución se ha ejecutado y su evidencia ha quedado anclada en la cadena.')
+        toast('The return has been executed and its evidence anchored on the chain.')
         state.drawer = null
         await refresh(); render()
       } catch (err) { toast(err.message) }
@@ -1017,7 +1315,7 @@ function wireView(view) {
       el.disabled = true
       try {
         await api(`/api/donations/${el.dataset.rescore}/score`, { method: 'POST' })
-        toast('La donación se ha vuelto a evaluar.')
+        toast('The donation has been re-assessed.')
         await refresh(); render()
       } catch (err) { toast(err.message) }
     }))
@@ -1028,22 +1326,50 @@ function wireView(view) {
   root.querySelectorAll('[data-close-drawer]').forEach((el) =>
     el.addEventListener('click', () => { state.drawer = null; render() }))
 
+  root.querySelectorAll('[data-cert]').forEach((el) =>
+    el.addEventListener('click', () => downloadCertificate(el.dataset.cert)))
+
   if (view === 'donations') wireDonationFilters()
   if (view === 'compliance') wireCompliance()
+  if (view === 'audit') wireAuditFilters()
 
   const demo = root.querySelector('#runDemo')
   demo?.addEventListener('click', async () => {
     demo.disabled = true
-    demo.textContent = 'Recargando…'
+    demo.textContent = 'Reloading…'
     try {
       await api('/api/demo/seed', { method: 'POST' })
       await refresh(); render()
-      toast('Se han recargado los datos de demostración.')
+      toast('Demonstration data reloaded.')
     } catch (err) { toast(err.message); demo.disabled = false }
   })
 
-  // Move focus into the drawer so a keyboard user is not left behind it.
   root.querySelector('.drawer')?.querySelector('button')?.focus()
+}
+
+/**
+ * Download the evidence certificate for one donation.
+ *
+ * The file is built by the server from anchored evidence, so what an observer
+ * downloads is the same thing the tribunal would verify — not a rendering of
+ * it produced by the browser.
+ */
+async function downloadCertificate(donationId) {
+  try {
+    const cert = await api(`/api/audit/certificate/${donationId}`)
+    const blob = new Blob([JSON.stringify(cert, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${refOf(donationId)}-certificate.json`
+    document.body.append(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+    toast('Certificate downloaded.')
+  } catch (err) {
+    toast(err.message)
+  }
 }
 
 function wireDonationFilters() {
@@ -1079,6 +1405,23 @@ function wireDonationFilters() {
     }))
 }
 
+/** Audit-view filters act on the rendered rows; no re-render, no lost scroll. */
+function wireAuditFilters() {
+  const party = root.querySelector('#auditParty')
+  const status = root.querySelector('#auditStatus')
+  if (!party || !status) return
+
+  const apply = () => {
+    root.querySelectorAll('#auditTable tbody tr').forEach((tr) => {
+      const okParty = party.value === 'all' || tr.dataset.party === party.value
+      const okStatus = status.value === 'all' || tr.dataset.status === status.value
+      tr.classList.toggle('hidden', !(okParty && okStatus))
+    })
+  }
+  party.addEventListener('change', apply)
+  status.addEventListener('change', apply)
+}
+
 function wireCompliance() {
   const button = root.querySelector('#runAnalysis')
   const bar = root.querySelector('#analysisBar > i')
@@ -1088,25 +1431,25 @@ function wireCompliance() {
     button.disabled = true
     const pending = attentionRows().slice(0, 8)
     if (pending.length === 0) {
-      toast('No hay donaciones pendientes de analizar.')
+      toast('Nothing left to re-assess.')
       button.disabled = false
       return
     }
 
     let done = 0
     for (const row of pending) {
-      try { await api(`/api/donations/${row.donation.id}/score`, { method: 'POST' }) } catch { /* continúa */ }
+      try { await api(`/api/donations/${row.donation.id}/score`, { method: 'POST' }) } catch { /* keep going */ }
       done++
       bar.style.width = `${Math.round((done / pending.length) * 100)}%`
     }
 
     await refresh()
-    toast(`Se ${done === 1 ? 'ha' : 'han'} vuelto a analizar ${done} ${done === 1 ? 'donación' : 'donaciones'}.`)
+    toast(`Re-assessed ${done} ${done === 1 ? 'donation' : 'donations'}.`)
     render()
   })
 }
 
-/* ══ Arranque ══════════════════════════════════════════════════════════════ */
+/* ══ Boot ══════════════════════════════════════════════════════════════════ */
 
 async function start() {
   await refresh()
@@ -1117,21 +1460,23 @@ async function start() {
     // A donation arriving mid-demo should appear on its own. Never re-render
     // while a drawer is open or someone is typing into a filter.
     if (state.drawer || document.activeElement?.id === 'q') return
-    try { await refresh(); render() } catch { /* la sesión se maneja en api() */ }
+    try { await refresh(); render() } catch { /* session handled in api() */ }
   }, 8000)
 }
 
 window.addEventListener('hashchange', () => {
   // A drawer belongs to the view that opened it.
   state.drawer = null
-  if (state.me) render()
+  if (state.me || isPublicRoute()) render()
 })
 
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state.drawer) { state.drawer = null; render() }
 })
 
-try {
+if (isPublicRoute()) {
+  await renderDonate()
+} else try {
   const res = await fetch('/api/auth/me', { credentials: 'same-origin' })
   if (res.ok) {
     state.me = (await res.json()).user

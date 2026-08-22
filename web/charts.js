@@ -7,12 +7,11 @@
  * and work offline. Same visual language: thin axes, no heavy gridlines, one
  * accent colour.
  *
- * Restyled to the Project Delivery palette: flat fills instead of gradients,
- * square line joins and markers, and a 3px stroke that survives a printout or
- * a high-contrast mode.
+ * Flat fills rather than gradients, and a 3px stroke that survives a printout
+ * or a high-contrast mode.
  */
 
-const ACCENT = '#1d70b8'
+const ACCENT = '#155EEF'
 
 const escapeText = (s) =>
   String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
@@ -53,7 +52,7 @@ export function areaChart(series, { height = 260 } = {}) {
   const innerH = H - pad.top - pad.bottom
 
   if (series.length === 0) {
-    return `<div class="empty">Sin actividad en el período.</div>`
+    return `<div class="empty">No activity in this period.</div>`
   }
 
   const max = niceMax(Math.max(...series.map((d) => d.value), 1))
@@ -89,7 +88,7 @@ export function areaChart(series, { height = 260 } = {}) {
 
   return `
   <svg class="chart" viewBox="0 0 ${W} ${H}" role="img"
-       aria-label="Actividad de donaciones por día">
+       aria-label="Donation activity by day">
     ${ticks}
     <path d="${area}" fill="${ACCENT}" fill-opacity="0.12"/>
     <path d="${line}" fill="none" stroke="${ACCENT}" stroke-width="3"
@@ -109,7 +108,7 @@ export function donutChart(slices, { size = 200, thickness = 26 } = {}) {
   const circumference = 2 * Math.PI * r
 
   if (total === 0) {
-    return `<svg class="chart" viewBox="0 0 ${size} ${size}" role="img" aria-label="Sin datos">
+    return `<svg class="chart" viewBox="0 0 ${size} ${size}" role="img" aria-label="No data">
       <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="#cecece" stroke-width="${thickness}"/>
     </svg>`
   }
@@ -132,12 +131,12 @@ export function donutChart(slices, { size = 200, thickness = 26 } = {}) {
 
   return `
   <svg class="chart" viewBox="0 0 ${size} ${size}" style="max-width:${size}px;margin:0 auto"
-       role="img" aria-label="Distribución por estado de cumplimiento">
+       role="img" aria-label="Breakdown by compliance status">
     <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="#f3f2f1" stroke-width="${thickness}"/>
     ${arcs}
     <text x="${c}" y="${c - 2}" text-anchor="middle"
           style="font-size:30px;font-weight:700;fill:#0b0c0c">${headline}%</text>
     <text x="${c}" y="${c + 20}" text-anchor="middle"
-          style="font-size:15px;fill:#484949">verificadas</text>
+          style="font-size:15px;fill:#484949">verified</text>
   </svg>`
 }

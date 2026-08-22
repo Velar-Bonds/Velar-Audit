@@ -80,7 +80,7 @@ export type ComplianceStatus = 'verified' | 'pending' | 'non_compliant'
 export interface ComplianceFinding {
   /** Machine-readable rule id, e.g. 'foreign_donor'. */
   code: string
-  /** Human sentence shown in the dashboard, in Spanish. */
+  /** Human sentence shown in the dashboard. */
   message: string
   severity: 'info' | 'warning' | 'violation'
 }

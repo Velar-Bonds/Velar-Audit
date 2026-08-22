@@ -14,8 +14,8 @@ import type { Party } from './types.ts'
  */
 
 const PARTIES: Party[] = [
-  { id: 'party-alfa', name: 'Partido Alfa', code: 'ALFA', country: 'CR', walletIndex: 0 },
-  { id: 'party-beta', name: 'Partido Beta', code: 'BETA', country: 'CR', walletIndex: 1 },
+  { id: 'party-alfa', name: 'Alfa Party', code: 'ALFA', country: 'CR', walletIndex: 0 },
+  { id: 'party-beta', name: 'Beta Party', code: 'BETA', country: 'CR', walletIndex: 1 },
 ]
 
 /**
@@ -49,7 +49,7 @@ export async function seedIdentity(): Promise<void> {
     })
   }
 
-  console.log(`[auth] cuentas de demo creadas — contraseña: ${DEMO_PASSWORD}`)
+  console.log(`[auth] demo accounts created — password: ${DEMO_PASSWORD}`)
   for (const account of ACCOUNTS) console.log(`         ${account.email} (${account.role})`)
 }
 

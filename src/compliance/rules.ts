@@ -20,7 +20,7 @@ import type {
 
 /** Demo conversion rates. Replace with a real oracle before mainnet. */
 const USD_RATES: Record<string, number> = {
-  USDC: 1, USDT: 1, ETH: 3000, BTC: 95000,
+  USDT: 1, USDC: 1, ETH: 3000, BTC: 95000,
 }
 
 export function toUsd(amount: number, asset: string): number {
@@ -44,8 +44,8 @@ export function evaluateRules(ctx: RuleContext): ComplianceFinding[] {
     findings.push({
       code: 'no_attestation',
       message: expired
-        ? 'Sin atestación de KYC / origen de fondos dentro del plazo. Debe devolverse.'
-        : 'A la espera de la atestación de KYC / origen de fondos del proveedor.',
+        ? 'No identity or source-of-funds attestation within the cure window. Must be returned.'
+        : 'Awaiting the identity and source-of-funds attestation from the provider.',
       severity: expired ? 'violation' : 'warning',
     })
     return findings
@@ -55,7 +55,7 @@ export function evaluateRules(ctx: RuleContext): ComplianceFinding[] {
   if (!verifyAttestation(attestation, donation)) {
     findings.push({
       code: 'attestation_tampered',
-      message: 'El hash de la atestación no reproduce. La evidencia fue alterada.',
+      message: 'The attestation hash does not reproduce. The evidence has been altered.',
       severity: 'violation',
     })
   }
@@ -64,7 +64,7 @@ export function evaluateRules(ctx: RuleContext): ComplianceFinding[] {
   if (attestation.donorCountry !== config.compliance.country) {
     findings.push({
       code: 'foreign_donor',
-      message: `Donante extranjero (${attestation.donorCountry}). El financiamiento político extranjero es ilegal.`,
+      message: `Foreign donor (${attestation.donorCountry}). Foreign political financing is illegal.`,
       severity: 'violation',
     })
   }
@@ -73,7 +73,7 @@ export function evaluateRules(ctx: RuleContext): ComplianceFinding[] {
   if (!attestation.kycVerified) {
     findings.push({
       code: 'kyc_failed',
-      message: 'El proveedor no logró verificar la identidad del donante.',
+      message: 'The provider could not verify the donor’s identity.',
       severity: 'violation',
     })
   }
@@ -82,7 +82,7 @@ export function evaluateRules(ctx: RuleContext): ComplianceFinding[] {
   if (attestation.sourceOfFunds === 'undisclosed') {
     findings.push({
       code: 'undisclosed_source',
-      message: 'Origen de fondos no declarado. No se admiten donaciones anónimas.',
+      message: 'Source of funds not declared. Anonymous donations are not admissible.',
       severity: 'violation',
     })
   }
@@ -97,7 +97,7 @@ export function evaluateRules(ctx: RuleContext): ComplianceFinding[] {
   if (donorTotalUsd > config.compliance.donorCapUsd) {
     findings.push({
       code: 'over_cap',
-      message: `El donante acumula USD ${donorTotalUsd.toLocaleString('es-CR')}, sobre el tope de USD ${config.compliance.donorCapUsd.toLocaleString('es-CR')}.`,
+      message: `This donor has now given USD ${donorTotalUsd.toLocaleString('en-US')}, over the USD ${config.compliance.donorCapUsd.toLocaleString('en-US')} annual cap.`,
       severity: 'violation',
     })
   }
@@ -106,7 +106,7 @@ export function evaluateRules(ctx: RuleContext): ComplianceFinding[] {
   if (attestation.isPep) {
     findings.push({
       code: 'pep_donor',
-      message: 'Donante políticamente expuesto. Requiere revisión manual del TSE.',
+      message: 'Politically exposed donor. Requires manual review by the electoral tribunal.',
       severity: 'warning',
     })
   }
@@ -114,7 +114,7 @@ export function evaluateRules(ctx: RuleContext): ComplianceFinding[] {
   if (findings.length === 0) {
     findings.push({
       code: 'clear',
-      message: 'Atestación válida, donante nacional, dentro del tope.',
+      message: 'Valid attestation, domestic donor, within the annual cap.',
       severity: 'info',
     })
   }

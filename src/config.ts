@@ -27,7 +27,7 @@ export const config = {
     network: str('WDK_NETWORK', 'sepolia'),
     rpcUrl: str('WDK_RPC_URL', 'https://ethereum-sepolia-rpc.publicnode.com'),
     token: {
-      symbol: str('WDK_TOKEN_SYMBOL', 'USDC'),
+      symbol: str('WDK_TOKEN_SYMBOL', 'USDT'),
       address: str('WDK_TOKEN_ADDRESS'),
       decimals: num('WDK_TOKEN_DECIMALS', 6),
     },

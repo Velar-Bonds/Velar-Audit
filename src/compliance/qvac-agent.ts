@@ -40,7 +40,7 @@ const RESPONSE_SCHEMA = {
       properties: {
         rationale: {
           type: 'string',
-          description: 'Una sola frase en español que reformula los hallazgos dados.',
+          description: 'A single English sentence restating the findings given.',
         },
       },
       required: ['rationale'],
@@ -49,35 +49,35 @@ const RESPONSE_SCHEMA = {
   },
 } as const
 
-const SYSTEM_PROMPT = `Sos un redactor tecnico para un tribunal electoral.
-Reformulas hallazgos ya decididos en UNA sola frase en espanol, de maximo 40 palabras.
-Nunca agregas informacion, nunca opinas sobre legalidad, nunca citas leyes ni articulos.
-Escribis unicamente la frase final, sin prefacios ni comentarios sobre estas instrucciones.`
+const SYSTEM_PROMPT = `You are a technical writer for an electoral tribunal.
+You restate findings that have already been decided, in ONE English sentence of at most 40 words.
+You never add information, never opine on legality, and never cite laws or articles.
+You write only the final sentence, with no preamble and no commentary about these instructions.`
 
 const FEW_SHOT = [
   {
     role: 'user',
-    content: `DONACION: 12000 USDC de un donante de US
-RESULTADO YA DECIDIDO: non_compliant
-HALLAZGOS:
-- Donante extranjero (US). El financiamiento politico extranjero es ilegal.`,
+    content: `DONATION: 12000 USDT from a donor in US
+DECIDED RESULT: non_compliant
+FINDINGS:
+- Foreign donor (US). Foreign political financing is illegal.`,
   },
   {
     role: 'assistant',
     content:
-      '{"rationale": "Donacion de 12000 USDC rechazada por provenir de un donante extranjero (US)."}',
+      '{"rationale": "Donation of 12000 USDT rejected because it came from a foreign donor (US)."}',
   },
   {
     role: 'user',
-    content: `DONACION: 1500 USDC de un donante de CR
-RESULTADO YA DECIDIDO: verified
-HALLAZGOS:
-- Atestacion valida, donante nacional, dentro del tope.`,
+    content: `DONATION: 1500 USDT from a donor in CR
+DECIDED RESULT: verified
+FINDINGS:
+- Valid attestation, domestic donor, within the annual cap.`,
   },
   {
     role: 'assistant',
     content:
-      '{"rationale": "Donacion de 1500 USDC verificada: donante nacional con atestacion valida y dentro del tope."}',
+      '{"rationale": "Donation of 1500 USDT verified: domestic donor with a valid attestation and within the cap."}',
   },
 ]
 
@@ -138,11 +138,11 @@ function buildPrompt(
   status: string,
   findings: ComplianceFinding[],
 ): string {
-  return `DONACION: ${donation.amountDecimal} ${donation.asset}${
-    attestation ? ` de un donante de ${attestation.donorCountry}` : ' sin atestacion de KYC'
+  return `DONATION: ${donation.amountDecimal} ${donation.asset}${
+    attestation ? ` from a donor in ${attestation.donorCountry}` : ' with no attestation'
   }
-RESULTADO YA DECIDIDO: ${status}
-HALLAZGOS:
+DECIDED RESULT: ${status}
+FINDINGS:
 ${findings.map((f) => `- ${f.message}`).join('\n')}`
 }
 
@@ -198,11 +198,11 @@ async function runModel(modelId: string, prompt: string): Promise<AgentOutput | 
  */
 function contradictsVerdict(rationale: string, status: ComplianceStatus): boolean {
   const text = rationale.toLowerCase()
-  const negated = /\bno (se )?(rechaz|devuel|marc|incumpl|viol)/.test(text)
-  const cleared = /\b(es|resulta) (legal|valida|conforme|aceptable)\b/.test(text)
+  const negated = /\bnot (rejected|returned|flagged|illegal|a violation|in breach)\b/.test(text)
+  const cleared = /\b(is|was) (legal|valid|compliant|acceptable|permitted)\b/.test(text)
 
   if (status === 'non_compliant') return negated || cleared
-  if (status === 'verified') return /\b(rechaz|ilegal|no conforme|viola)/.test(text)
+  if (status === 'verified') return /\b(rejected|illegal|non-compliant|violat)/.test(text)
   return false
 }
 
