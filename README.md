@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="web/logo.png" alt="AUDI — Transparencia que se puede verificar" width="420">
+<img src="web/logo-readme.jpg" alt="AUDI — Transparencia que se puede verificar" width="480">
 
 **Donation auditability for political financing**
 
