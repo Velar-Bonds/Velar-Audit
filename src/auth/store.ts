@@ -1,7 +1,8 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { dirname } from 'node:path'
-import type { Session, User } from '../types.js'
+import { config } from '../config.js'
+import type { User } from '../types.js'
 
 /**
  * Credentials live in their own file, apart from the donation ledger. Different
@@ -14,17 +15,16 @@ const SESSION_TTL_MS = 12 * 60 * 60 * 1000 // 12h — longer than any demo, shor
 
 interface AuthDb {
   users: User[]
-  sessions: Session[]
 }
 
 function load(): AuthDb {
-  if (!existsSync(DB_PATH)) return { users: [], sessions: [] }
+  if (!existsSync(DB_PATH)) return { users: [] }
   try {
     const parsed = JSON.parse(readFileSync(DB_PATH, 'utf8'))
-    return { users: parsed.users ?? [], sessions: parsed.sessions ?? [] }
+    return { users: parsed.users ?? [] }
   } catch {
     console.warn('[auth] corrupt auth db, starting fresh')
-    return { users: [], sessions: [] }
+    return { users: [] }
   }
 }
 
@@ -45,12 +45,40 @@ function persist(): void {
 }
 
 /**
- * Session tokens are stored hashed, for the same reason passwords are: a stolen
- * database should not hand over live sessions. SHA-256 is enough here because
- * the token is 32 random bytes, not a guessable secret.
+ * Sessions are stateless: the cookie carries the claim and an HMAC over it, and
+ * nothing about it is stored server-side.
+ *
+ * The stored-token design this replaces could not work on a serverless host.
+ * Every cold start begins with an empty in-memory store and a read-only disk,
+ * so a session issued by one instance was invisible to the next and the user
+ * was thrown back to the login screen mid-click.
+ *
+ * The claim is the user's *email*, not their id: the demonstration accounts are
+ * reseeded with a fresh random id on every boot, so an id is only stable within
+ * one instance's lifetime — exactly the property that has to be avoided here.
  */
-function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex')
+const SESSION_SECRET = (() => {
+  const configured = config.auth.sessionSecret
+  if (configured) return configured
+
+  console.warn(
+    '[auth] SESSION_SECRET is not set — using a per-process random secret.\n' +
+    '       Fine locally. On a serverless host every instance picks a different\n' +
+    '       one, so logins will appear to expire at random. Set it before deploying.',
+  )
+  return randomBytes(32).toString('hex')
+})()
+
+function sign(payload: string): string {
+  return createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url')
+}
+
+/** Constant-time compare that tolerates length mismatch without throwing. */
+function signatureMatches(expected: string, actual: string): boolean {
+  const a = Buffer.from(expected)
+  const b = Buffer.from(actual)
+  if (a.length !== b.length) return false
+  return timingSafeEqual(a, b)
 }
 
 export const authStore = {
@@ -72,46 +100,45 @@ export const authStore = {
     return user
   },
 
-  /** Issue a session and return the raw token — the only time it exists in plaintext. */
+  /** Issue a session token. Nothing is stored: the token carries its own proof. */
   createSession(userId: string): { token: string; expiresAt: number } {
-    const token = randomBytes(32).toString('base64url')
-    const now = Date.now()
-    const expiresAt = now + SESSION_TTL_MS
+    const user = authStore.userById(userId)
+    if (!user) throw new Error(`no existe el usuario ${userId}`)
 
-    db.sessions.push({ tokenHash: hashToken(token), userId, createdAt: now, expiresAt })
-    authStore.pruneExpired()
-    persist()
-    return { token, expiresAt }
+    const expiresAt = Date.now() + SESSION_TTL_MS
+    const payload = Buffer.from(`${user.email}|${expiresAt}`).toString('base64url')
+
+    return { token: `${payload}.${sign(payload)}`, expiresAt }
   },
 
-  /** Resolve a raw token to its user, or null if unknown or expired. */
+  /** Resolve a token to its user, or null if forged, malformed, or expired. */
   userForToken(token: string): User | null {
     if (!token) return null
-    const wanted = Buffer.from(hashToken(token), 'hex')
 
-    for (const session of db.sessions) {
-      const candidate = Buffer.from(session.tokenHash, 'hex')
-      if (candidate.length !== wanted.length) continue
-      if (!timingSafeEqual(candidate, wanted)) continue
-      if (session.expiresAt < Date.now()) return null
-      return authStore.userById(session.userId)
-    }
-    return null
+    const dot = token.lastIndexOf('.')
+    if (dot === -1) return null
+
+    const payload = token.slice(0, dot)
+    if (!signatureMatches(sign(payload), token.slice(dot + 1))) return null
+
+    // Only decoded once the signature is known good, so a forged payload is
+    // never parsed at all.
+    const [email, expiresAt] = Buffer.from(payload, 'base64url').toString('utf8').split('|')
+    if (!email || Number(expiresAt) < Date.now()) return null
+
+    return authStore.userByEmail(email)
   },
 
-  revokeSession(token: string): void {
-    const target = hashToken(token)
-    db.sessions = db.sessions.filter((s) => s.tokenHash !== target)
-    persist()
-  },
-
-  pruneExpired(): void {
-    const now = Date.now()
-    db.sessions = db.sessions.filter((s) => s.expiresAt > now)
-  },
+  /**
+   * Clearing the cookie is the whole of logout. A stateless token cannot be
+   * recalled from the server, so the trade for surviving cold starts is that a
+   * token already copied off the client stays valid until it expires — which is
+   * why the TTL is 12 hours and not a week.
+   */
+  revokeSession(_token: string): void {},
 
   reset(): void {
-    db = { users: [], sessions: [] }
+    db = { users: [] }
     persist()
   },
 }

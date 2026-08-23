@@ -51,6 +51,16 @@ export const config = {
     minIntervalMs: num('SYNC_MIN_INTERVAL_SECONDS', 10) * 1000,
   },
 
+  auth: {
+    /**
+     * Key the session cookies are signed with. Sessions carry their own proof
+     * rather than being stored, so this is the only thing tying a cookie to a
+     * deployment: every instance must share one value, or a login issued by the
+     * instance that answered the form is rejected by the one that answers next.
+     */
+    sessionSecret: str('SESSION_SECRET'),
+  },
+
   qvac: {
     model: str('QVAC_MODEL', 'QWEN3_4B_INST_Q4_K_M'),
   },

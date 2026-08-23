@@ -208,11 +208,3 @@ export interface SafeUser {
   partyId: string | null
   partyName: string | null
 }
-
-export interface Session {
-  /** Opaque random token. Stored hashed, like a password. */
-  tokenHash: string
-  userId: string
-  createdAt: number
-  expiresAt: number
-}
