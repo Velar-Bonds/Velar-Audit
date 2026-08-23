@@ -165,9 +165,8 @@ function renderLogin(error = '') {
     <aside class="auth-art">
       ${networkMesh()}
       <div style="position:relative;display:flex;align-items:center;gap:12px">
-        <span class="brand-mark">V</span>
         <span>
-          <span class="brand-name">Velar Audit</span><br>
+          <img class="brand-logo lg" src="/logo-header-inverse.svg" alt="AUDI" width="150" height="40">
           <span class="brand-sub">Supreme Electoral Tribunal of Costa Rica</span>
         </span>
       </div>
@@ -296,9 +295,8 @@ function renderSignup(error = '') {
     <aside class="auth-art">
       ${networkMesh()}
       <div style="position:relative;display:flex;align-items:center;gap:12px">
-        <span class="brand-mark">V</span>
         <span>
-          <span class="brand-name">Velar Audit</span><br>
+          <img class="brand-logo lg" src="/logo-header-inverse.svg" alt="AUDI" width="150" height="40">
           <span class="brand-sub">Supreme Electoral Tribunal of Costa Rica</span>
         </span>
       </div>
@@ -418,10 +416,9 @@ async function renderDonate() {
   <a href="#main" class="skip-link">Skip to main content</a>
 
   <div class="topbar" style="padding-left:24px;padding-right:24px">
-    <button class="brand-link" data-goto-login aria-label="Velar Audit"
+    <button class="brand-link" data-goto-login aria-label="AUDI"
       style="display:flex;align-items:center;gap:12px;background:none;border:none;cursor:pointer">
-      <span class="brand-mark">V</span>
-      <span class="brand-name">VELAR-AUDIT</span>
+      <img class="brand-logo" src="/logo-header.svg" alt="AUDI" width="150" height="40">
     </button>
     <div class="profile">
       <button class="btn secondary sm" data-goto-login>Institutional sign in</button>
@@ -547,8 +544,7 @@ function renderShell(view, body) {
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-mark">V</span>
-        <span class="brand-name">VELAR-AUDIT</span>
+        <img class="brand-logo" src="/logo-header.svg" alt="AUDI" width="150" height="40">
       </div>
 
       <nav class="nav" aria-label="Main menu">
@@ -579,7 +575,7 @@ function renderShell(view, body) {
       <header class="topbar">
         <nav class="breadcrumbs" aria-label="Breadcrumb">
           <ol>
-            <li><button data-route="dashboard">VELAR-AUDIT</button></li>
+            <li><button data-route="dashboard">AUDI</button></li>
             ${crumbs.map(([label, route]) =>
               `<li>${route
                 ? `<button data-route="${route}">${esc(label)}</button>`
