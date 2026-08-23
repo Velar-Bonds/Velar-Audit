@@ -17,7 +17,8 @@
     "donor:new": "tsx src/scripts/new-donor.ts",
     "seed:chain": "tsx src/scripts/seed-chain.ts",
     "faucet:usdt": "tsx src/scripts/faucet.ts",
-    "provision": "tsx src/scripts/provision.ts"
+    "provision": "tsx src/scripts/provision.ts",
+    "donate": "tsx src/scripts/donate.ts"
   },
   "dependencies": {
     "@tetherto/wdk": "^1.0.0-beta.16",
