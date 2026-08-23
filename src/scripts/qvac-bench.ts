@@ -13,55 +13,78 @@
  * its job, and it is the number worth publishing.
  */
 import 'dotenv/config'
+import { store } from '../store.js'
 import { assess } from '../compliance/qvac-agent.js'
+import { issueAttestation } from '../attestation/stub-provider.js'
 import type { RuleContext } from '../compliance/rules.js'
 import type { Attestation, Donation } from '../types.js'
 
 const RUNS = Number(process.argv[2] ?? 5)
 
-function donation(amount: number): Donation {
+// The benchmark stages its own fixtures; it must not inherit a previous run.
+store.reset()
+
+/**
+ * Each scenario gets its own donor.
+ *
+ * Sharing one address across all of them makes the annual cap accumulate
+ * between unrelated cases, so a scenario meant to be clean inherits whatever
+ * the previous ones spent.
+ */
+function donation(amount: number, tag: string): Donation {
   return {
-    id: 'don_bench', txHash: '0x' + '0'.repeat(64), chain: 'ethereum', asset: 'USDT',
+    id: `don_${tag}`, txHash: '0x' + tag.padEnd(64, '0'), chain: 'ethereum', asset: 'USDT',
     amountRaw: String(amount * 1e6), amountDecimal: amount,
-    fromAddress: '0x' + '1'.repeat(40), toAddress: '0x' + '2'.repeat(40),
+    fromAddress: '0x' + tag.padEnd(40, '1'), toAddress: '0x' + '2'.repeat(40),
     blockNumber: 1, receivedAt: Date.now(), partyId: 'party-alfa',
   }
 }
 
-function attestation(over: Partial<Attestation> = {}): Attestation {
-  return {
-    id: 'att_bench', donationId: 'don_bench', providerId: 'stub-kyc-provider',
-    donorRef: 'donor-bench', donorCountry: 'CR', sourceOfFunds: 'business_income',
-    kycVerified: true, isPep: false, issuedAt: Date.now(), hash: 'a'.repeat(64),
-    ...over,
-  } as Attestation
+/**
+ * Built through the real provider so the hash reproduces.
+ *
+ * A hand-written hash trips `attestation_tampered` on every scenario, which
+ * collapses the whole outcome space into non_compliant: the table then reports
+ * five confident rows that are all measuring one code path, and the `verified`
+ * path is never executed at all.
+ */
+function attestation(d: Donation, over: Partial<Attestation> = {}): Attestation {
+  return issueAttestation({
+    donation: d,
+    donorRef: `donor-${d.id}`,
+    donorCountry: (over.donorCountry ?? 'CR') as Attestation['donorCountry'],
+    sourceOfFunds: over.sourceOfFunds ?? 'business_income',
+    kycVerified: over.kycVerified ?? true,
+    isPep: over.isPep ?? false,
+    issuedAt: d.receivedAt,
+  })
 }
 
+/**
+ * The cap is an aggregate rule: it sums a donor's contributions from the store,
+ * so a donation held in isolation can never trip it. The scenario has to be
+ * staged, not merely described.
+ */
+function staged(d: Donation, a: Attestation | null): RuleContext {
+  store.addDonation(d)
+  if (a) store.putAttestation(a)
+  return { donation: d, attestation: a, now: Date.now() }
+}
+
+const domestic = donation(500, 'a1')
+const foreign = donation(500, 'b2')
+const unverified = donation(500, 'c3')
+const pep = donation(500, 'd4')
+const bare = donation(500, 'e5')
+const capped = donation(9_000, 'f6')
+
 const SCENARIOS: { name: string; ctx: RuleContext }[] = [
-  {
-    name: 'domestic, within cap',
-    ctx: { donation: donation(500), attestation: attestation(), now: Date.now() },
-  },
-  {
-    name: 'foreign donor',
-    ctx: {
-      donation: donation(500),
-      attestation: attestation({ donorCountry: 'US' as Attestation['donorCountry'] }),
-      now: Date.now(),
-    },
-  },
-  {
-    name: 'KYC not verified',
-    ctx: { donation: donation(500), attestation: attestation({ kycVerified: false }), now: Date.now() },
-  },
-  {
-    name: 'politically exposed donor',
-    ctx: { donation: donation(500), attestation: attestation({ isPep: true }), now: Date.now() },
-  },
-  {
-    name: 'no attestation',
-    ctx: { donation: donation(500), attestation: null, now: Date.now() },
-  },
+  { name: 'domestic, within cap', ctx: staged(domestic, attestation(domestic)) },
+  { name: 'foreign donor', ctx: staged(foreign, attestation(foreign, { donorCountry: 'US' as Attestation['donorCountry'] })) },
+  { name: 'KYC not verified', ctx: staged(unverified, attestation(unverified, { kycVerified: false })) },
+  { name: 'politically exposed donor', ctx: staged(pep, attestation(pep, { isPep: true })) },
+  { name: 'no attestation', ctx: staged(bare, null) },
+  { name: 'over the annual cap', ctx: staged(capped, attestation(capped)) },
 ]
 
 console.log(`\n  QVAC reliability — ${RUNS} run(s) per scenario, model ${process.env.QVAC_MODEL}\n`)
