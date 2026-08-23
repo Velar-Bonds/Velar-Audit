@@ -15,7 +15,9 @@
     "qvac:pull": "tsx src/scripts/pull-model.ts",
     "test": "node --import tsx --test src/**/*.test.ts",
     "donor:new": "tsx src/scripts/new-donor.ts",
-    "seed:chain": "tsx src/scripts/seed-chain.ts"
+    "seed:chain": "tsx src/scripts/seed-chain.ts",
+    "faucet:usdt": "tsx src/scripts/faucet.ts",
+    "provision": "tsx src/scripts/provision.ts"
   },
   "dependencies": {
     "@tetherto/wdk": "^1.0.0-beta.16",
@@ -26,7 +28,8 @@
     "@types/node": "^26.2.0",
     "@types/express": "^5.0.6",
     "@types/qrcode": "^1.5.6",
-    "tsx": "^4.23.12"
+    "tsx": "^4.23.12",
+    "ethers": "^6.13.0"
   },
   "devDependencies": {
     "typescript": "^7.0.2",
