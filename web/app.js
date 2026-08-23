@@ -166,7 +166,7 @@ function renderLogin(error = '') {
       ${networkMesh()}
       <div style="position:relative;display:flex;align-items:center;gap:12px">
         <span>
-          <img class="brand-logo lg" src="/logo-header-inverse.svg" alt="AUDI" width="150" height="40">
+          <img class="brand-logo lg" src="/logo-header.png" alt="AUDI" width="142" height="40">
           <span class="brand-sub">Supreme Electoral Tribunal of Costa Rica</span>
         </span>
       </div>
@@ -296,7 +296,7 @@ function renderSignup(error = '') {
       ${networkMesh()}
       <div style="position:relative;display:flex;align-items:center;gap:12px">
         <span>
-          <img class="brand-logo lg" src="/logo-header-inverse.svg" alt="AUDI" width="150" height="40">
+          <img class="brand-logo lg" src="/logo-header.png" alt="AUDI" width="142" height="40">
           <span class="brand-sub">Supreme Electoral Tribunal of Costa Rica</span>
         </span>
       </div>
@@ -418,7 +418,7 @@ async function renderDonate() {
   <div class="topbar" style="padding-left:24px;padding-right:24px">
     <button class="brand-link" data-goto-login aria-label="AUDI"
       style="display:flex;align-items:center;gap:12px;background:none;border:none;cursor:pointer">
-      <img class="brand-logo" src="/logo-header.svg" alt="AUDI" width="150" height="40">
+      <img class="brand-logo" src="/logo-header.png" alt="AUDI" width="142" height="40">
     </button>
     <div class="profile">
       <button class="btn secondary sm" data-goto-login>Institutional sign in</button>
@@ -544,7 +544,7 @@ function renderShell(view, body) {
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">
-        <img class="brand-logo" src="/logo-header.svg" alt="AUDI" width="150" height="40">
+        <img class="brand-logo" src="/logo-header.png" alt="AUDI" width="142" height="40">
       </div>
 
       <nav class="nav" aria-label="Main menu">
