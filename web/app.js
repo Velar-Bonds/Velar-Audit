@@ -1796,17 +1796,6 @@ function wireView(view) {
     }
   })
 
-  const demo = root.querySelector('#runDemo')
-  demo?.addEventListener('click', async () => {
-    demo.disabled = true
-    demo.textContent = 'Reloading…'
-    try {
-      await api('/api/demo/seed', { method: 'POST' })
-      await refresh(); render()
-      toast('Demonstration data reloaded.')
-    } catch (err) { toast(err.message); demo.disabled = false }
-  })
-
   root.querySelector('.drawer')?.querySelector('button')?.focus()
 }
 

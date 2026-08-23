@@ -14,7 +14,17 @@ app.listen(config.port, async () => {
   console.log(`  chain: ${config.wdk.network} (id ${config.wdk.chainId})\n`)
 
   await bootstrap()
-  await startIndexer(onDonation)
+
+  if (!config.wdk.seedPhrase) {
+    console.log(
+      `\n  No wallet configured — the chain indexer is off.\n` +
+        `  To enable on-chain donation tracking:\n` +
+        `    1. Run npm run wallet:new\n` +
+        `    2. Paste the printed phrase into .env as WDK_SEED_PHRASE and restart\n`
+    )
+  } else {
+    await startIndexer(onDonation)
+  }
 
   setInterval(() => {
     sweepOverdue().catch((err) => console.warn('[sweep]', err.message))

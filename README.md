@@ -55,13 +55,20 @@ was.
 
 ## Run it
 
-Requires **Node 22 or later**. Nothing else: no database, no API keys, no testnet
-funds.
+Requires **Node 22 or later**. No database and no API keys.
 
 ```bash
 git clone https://github.com/Velar-Bonds/Velar-Audit.git
 cd Velar-Audit
-npm install && cp .env.example .env
+npm install
+cp .env.example .env
+npm run wallet:new
+```
+
+Paste the printed phrase into `.env` as `WDK_SEED_PHRASE`. This step is not
+optional: every wallet-touching call refuses to run without it. Then:
+
+```bash
 npm start
 ```
 
@@ -74,15 +81,34 @@ the password for all three is `velar-demo-2026`:
 | `alfa@velar.cr` | Party treasurer | Only Partido Alfa's donations |
 | `beta@velar.cr` | Party treasurer | Only Partido Beta's donations |
 
-Sign in as the TSE and press **Recargar datos de demostración** to load the
-scenario: 14 days of ordinary donation history plus four cases chosen to show
-every compliance outcome at once.
+What you get is a fully working app with an empty ledger. Zero donations is the
+real empty state, not a stub: the sign-in screen, the party isolation, and the
+dashboard all run against the same code path that later shows live chain data.
+No testnet funds are required for this.
 
-> **Demonstration mode** (`DEMO_MODE=1`, the default) runs the whole pipeline
-> against a simulated chain, so the demo works before any testnet wallet is
-> funded. The data model, the rules, the dashboard, and the audit trail are
-> identical in both modes. Anchors written by the simulator are labelled as such
-> in the API and in the interface — see [Going live](#going-live).
+### Loading the demonstration scenario
+
+Seeing donations that cover every compliance outcome — foreign donor, over-cap,
+KYC failure, and the rest — means sending real transactions on Sepolia. That
+needs a small amount of free testnet ETH and three commands.
+
+```bash
+npm run donor:new
+```
+
+Paste the printed phrase into `.env` as `DONOR_SEED_PHRASE`. Fund that donor
+wallet with Sepolia ETH from a faucet (Google Cloud and Alchemy both hand it
+out). Then:
+
+```bash
+npm run provision
+npm run seed:chain
+```
+
+`provision` mints test USDT via Aave's Sepolia faucet contract and tops up the
+party wallets with gas. `seed:chain` sends the donations on-chain. The indexer
+picks them up the same way it would pick up any other transfer — because they
+are ordinary transfers.
 
 ---
 
@@ -285,15 +311,11 @@ verify.
 
 ```bash
 npm run qvac:pull     # download the model weights before you need them
-npm run wallet:new    # generate the party wallet's BIP-39 seed phrase
 ```
 
-Put the seed phrase in `.env` as `WDK_SEED_PHRASE`, set `DEMO_MODE=0`, fund the
-address with Sepolia ETH and test USDC, then `npm start`. The wallet address is
-printed at startup and shown in the interface.
-
 `WDK_TOKEN_ADDRESS` is the only thing that changes between USDC, USDT, and
-mainnet — the WDK code path is identical for any ERC-20.
+mainnet — the WDK code path is identical for any ERC-20. The party wallet
+address is printed at startup and shown in the interface.
 
 ### Running QVAC on macOS
 
@@ -347,7 +369,10 @@ web/
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run qvac:pull` | Download the QVAC model weights |
 | `npm run wallet:new` | Generate a party wallet seed phrase |
-| `npm run donate:sim -- 2500 0xdonor…` | Push a donation into a running server |
+| `npm run donor:new` | Generate a donor wallet seed phrase |
+| `npm run provision` | Mint test USDT and fund party wallets with gas |
+| `npm run seed:chain` | Send real Sepolia donations covering every compliance outcome |
+| `npm run faucet:usdt` | Mint test USDT from Aave's Sepolia faucet |
 
 ---
 
