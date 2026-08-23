@@ -18,7 +18,9 @@
     "seed:chain": "tsx src/scripts/seed-chain.ts",
     "faucet:usdt": "tsx src/scripts/faucet.ts",
     "provision": "tsx src/scripts/provision.ts",
-    "donate": "tsx src/scripts/donate.ts"
+    "donate": "tsx src/scripts/donate.ts",
+    "qvac:bench": "tsx src/scripts/qvac-bench.ts",
+    "qvac:raw": "tsx src/scripts/qvac-raw.ts"
   },
   "dependencies": {
     "@tetherto/wdk": "^1.0.0-beta.16",

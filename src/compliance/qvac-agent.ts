@@ -212,10 +212,27 @@ function contradictsVerdict(rationale: string, status: ComplianceStatus): boolea
 }
 
 export async function assess(ctx: RuleContext): Promise<ComplianceVerdict> {
-  const findings = evaluateRules(ctx)
+  const ruleFindings = evaluateRules(ctx)
   const modelId = await getModelId()
 
-  const verdict = (engine: 'qvac' | 'rules', rationale: string) => {
+  /**
+   * `extra` is how the model reaches the record at all.
+   *
+   * It cannot clear anything: `statusFrom` lets a `violation` outrank every
+   * other severity, so a `warning` raised here turns `verified` into `pending`
+   * and leaves `non_compliant` exactly where it was. The model can ask for a
+   * human; it can never dismiss one. That asymmetry is the only shape in which
+   * a language model belongs anywhere near an electoral record.
+   */
+  const verdict = (
+    engine: 'qvac' | 'rules',
+    rationale: string,
+    extra: ComplianceFinding[] = [],
+  ) => {
+    // 'clear' means the rules found nothing to say. Once something else has
+    // been said, leaving it in reads as the record contradicting itself.
+    const base = extra.length ? ruleFindings.filter((f) => f.code !== 'clear') : ruleFindings
+    const findings = [...base, ...extra]
     const status = statusFrom(findings)
     return {
       donationId: ctx.donation.id,
@@ -232,13 +249,27 @@ export async function assess(ctx: RuleContext): Promise<ComplianceVerdict> {
   if (!modelId) return verdict('rules', '')
 
   try {
-    const status = statusFrom(findings)
-    const out = await runModel(modelId, buildPrompt(ctx.donation, ctx.attestation, status, findings))
+    const status = statusFrom(ruleFindings)
+    const out = await runModel(
+      modelId, buildPrompt(ctx.donation, ctx.attestation, status, ruleFindings))
     if (!out) return verdict('rules', '')
 
     if (contradictsVerdict(out.rationale, status)) {
-      console.warn(`[qvac] rationale contradicted the '${status}' verdict; discarded`)
-      return verdict('rules', '')
+      /*
+       * The model was asked to restate a decision and stated a different one.
+       * Discarding the sentence and moving on was the old behaviour, and it
+       * threw away a signal: whatever made the model disagree is usually a
+       * donation whose facts read ambiguously, which is precisely the kind a
+       * human should see.
+       */
+      console.warn(`[qvac] rationale contradicted the '${status}' verdict; escalating for review`)
+      return verdict('rules', '', [{
+        code: 'model_disagreement',
+        message:
+          `The local model's restatement contradicted the rules engine's '${status}' finding. ` +
+          'Flagged for manual review; the rules engine\'s determination stands.',
+        severity: 'warning',
+      }])
     }
 
     return verdict('qvac', out.rationale)
