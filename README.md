@@ -2,11 +2,11 @@
 
 <img src="web/logo-readme.jpg" alt="AUDI — Transparencia que se puede verificar" width="480">
 
-**Donation auditability for political financing**
+**Auditabilidad de donaciones para el financiamiento político**
 
-Every donation a political party receives is traceable from the moment it arrives
-to the moment it is verified, flagged, or returned — with the evidence anchored on
-a public blockchain and the donor's identity never leaving the KYC provider.
+Cada donación que recibe un partido es trazable desde que llega hasta que se
+verifica, se marca o se devuelve — con la evidencia anclada en una cadena
+pública y la identidad del donante sin salir nunca del proveedor de KYC.
 
 <br>
 
@@ -17,45 +17,179 @@ a public blockchain and the donor's identity never leaving the KYC provider.
 ![Ethereum](https://img.shields.io/badge/Sepolia-14528c?style=for-the-badge&logo=ethereum&logoColor=white)
 ![License](https://img.shields.io/badge/MIT-6b7885?style=for-the-badge)
 
-**Aleph Hackathon 2026** · Tether **WDK** + **QVAC** tracks
-
 </div>
 
 ---
 
-## Why this exists
+## Qué es AUDI
 
-Costa Rica's **Tribunal Supremo de Elecciones (TSE)** — the Supreme Electoral
-Tribunal — supervises how political parties are financed. It is one of the most
-respected electoral authorities in Latin America, and the constitutional body
-responsible for guaranteeing that elections are clean.
+Un sistema de auditoría de donaciones políticas. Un partido publica la dirección
+de su billetera, un donante le manda dinero directamente, y AUDI **observa la
+cadena** y construye el expediente: quién recibió cuánto, cuándo, con qué
+respaldo de identidad, y si esa donación cumple la ley.
 
-But the trail it supervises is paper. Nobody can independently verify who gave
-what, when, or whether the money was legal. The controls that do exist happen
-months after an election, when the result is already decided and the money is
-already spent.
+No es una plataforma de pagos. No es una pasarela. **No toca el dinero en ningún
+momento.** Es el instrumento de supervisión que se sienta al lado y verifica.
 
-**The TSE's president and magistrates asked us to build this.** After seeing our
-work on bond traceability, they asked for the same treatment applied to
-donations. This is not a hypothetical problem we invented to have something to
-demo — it is a request from the institution that would use it.
+## Qué es el TSE
 
-### The constraint that shapes everything
+El **Tribunal Supremo de Elecciones** de Costa Rica es el órgano constitucional
+que organiza y vigila las elecciones del país. Tiene rango de cuarto poder de la
+República: su independencia está en la Constitución, y entre sus funciones está
+supervisar cómo se financian los partidos políticos.
 
-Donor identity is sensitive and legally protected. The *fact* of a donation and
-its compliance status must be publicly verifiable. Those two requirements pull in
-opposite directions, and reconciling them is the entire design problem.
+Es una de las autoridades electorales más respetadas de América Latina. Y aun
+así, el rastro que supervisa es de papel.
 
-The answer: **sensitive data stays off-chain with the provider that collected it,
-and only hashes go on-chain.** A regulator can verify that a donation was
-assessed, when, and against what evidence — without anyone learning who the donor
-was.
+## Por qué lo necesita
+
+Hoy nadie puede verificar de forma independiente quién dio qué, cuándo, ni si
+ese dinero era legal. Los controles que existen ocurren **meses después** de una
+elección: cuando el resultado ya está decidido y la plata ya se gastó.
+
+El problema no es que falte voluntad de fiscalizar. Es que la información llega
+tarde, en formato que no se puede cruzar, y proviene de los mismos partidos
+supervisados.
+
+**El presidente y los magistrados del TSE pidieron esto.** Después de ver el
+trabajo de VELAR en trazabilidad de bonos, solicitaron el mismo tratamiento
+aplicado a las donaciones. No es un problema hipotético inventado para tener algo
+que demostrar — es un pedido de la institución que lo usaría.
+
+## Diferencia con VELAR
+
+**VELAR** es la plataforma completa: trazabilidad de instrumentos financieros
+públicos, con el ciclo de vida de certificados de bonos como pieza central, y
+arquitectura pensada para varios países de América Latina.
+
+**AUDI** es un producto distinto sobre el mismo principio. Toma el modelo de
+evidencia de VELAR — lo sensible fuera de la cadena, la prueba dentro — y lo
+aplica a un problema separado: el financiamiento de partidos políticos. El ciclo
+de bonos no forma parte de AUDI.
+
+Comparten la arquitectura y el criterio. No comparten alcance ni base de datos.
 
 ---
 
-## Run it
+## El problema de diseño
 
-Requires **Node 22 or later**. No database and no API keys.
+La identidad del donante es sensible y está protegida por ley. El **hecho** de la
+donación y su estado de cumplimiento deben ser públicamente verificables.
+
+Esos dos requisitos tiran en direcciones opuestas, y reconciliarlos es el
+problema entero.
+
+La respuesta: **los datos sensibles se quedan fuera de la cadena, con el
+proveedor que los recolectó, y a la cadena solo van hashes.** Un regulador puede
+verificar que una donación fue evaluada, cuándo, y contra qué evidencia — sin que
+nadie averigüe quién fue el donante.
+
+---
+
+## Cómo funciona
+
+### De dónde vienen las donaciones
+
+Un donante manda USD₮ desde su propia billetera directo a la dirección pública
+del partido. No hay página de pago, no hay checkout, no hay intermediario.
+
+Esto es deliberado. En el momento en que una plataforma se sienta entre el
+donante y el partido, esa plataforma se convierte en algo que el TSE tiene que
+confiar — y en algo que podría reordenar, demorar u ocultar una transacción sin
+que nadie lo note. Acá **la cadena es el canal de entrada**, y el trabajo del
+sistema es *observarla*, no *operarla*.
+
+### 1 — Ingreso
+
+La billetera de donaciones del partido se construye con el **Wallet Development
+Kit (WDK) de Tether** y es completamente autocustodiada: la frase semilla es del
+partido, y ningún exchange ni custodio tiene los fondos.
+
+Un indexador lee los registros `Transfer` de ERC-20 directamente de la cadena y
+registra cada transacción entrante. **Una donación no puede llegar sin quedar
+registrada**, porque el registro se construye de lo que dice la cadena, no de lo
+que reporta el partido.
+
+Cada partido recibe su propio índice de cuenta derivado de la misma semilla, así
+que un despliegue con muchos partidos necesita una semilla y muchas direcciones —
+y las donaciones a distintos partidos quedan separadas en la cadena, no por una
+columna en una base de datos.
+
+### 2 — Vínculo con la evidencia
+
+Un proveedor externo de KYC y origen de fondos emite una **atestación** por cada
+donación. El sistema guarda dos cosas:
+
+- una **referencia pseudónima del donante**, estable entre donaciones para poder
+  sumar contra el tope legal
+- el **hash SHA-256** del contenido de la atestación
+
+El contenido en sí — el nombre, el documento, el rastro bancario — nunca entra a
+este sistema. El hash usa JSON canónico con claves ordenadas, así que el TSE
+puede recalcularlo y obtener el mismo resultado. Eso es lo que hace la evidencia
+**reproducible** en vez de simplemente almacenada.
+
+### 3 — Cumplimiento
+
+Un motor de reglas determinista evalúa cada donación contra la normativa de
+financiamiento y decide su estado: donante extranjero, tope anual superado, KYC
+sin verificar, persona políticamente expuesta, atestación ausente.
+
+Ese motor es la fuente de verdad. Un regulador tiene que poder **reproducir** el
+veredicto, y para eso hace falta que sea determinista.
+
+Sobre ese resultado ya decidido corre un **agente QVAC con un modelo de lenguaje
+en la propia máquina**, cuyo único trabajo es convertir los códigos de regla en
+una frase que un auditor pueda leer. El modelo no decide: reformula.
+
+Corre local por una razón concreta: el agente razona sobre datos de KYC y origen
+de fondos. Mandar eso a una API en la nube sería entregarle a un tercero la lista
+de donantes de todos los partidos del país.
+
+### 4 — Ejecución
+
+Las donaciones no conformes se marcan para devolución. Cuando la devolución se
+ejecuta, la transacción del reembolso y toda la cadena de eventos — hash de la
+atestación, veredicto, devolución — quedan ancladas en la cadena con hash,
+timestamp y referencia de transacción.
+
+La billetera del partido está limitada por una política **`returns-only`** de
+WDK: las transferencias salientes se rechazan salvo que el destinatario sea una
+dirección que ya le donó. Un tesorero que intente mover fondos donados a donde no
+corresponde no recibe una transacción fallida — **nunca recibe una firma**.
+
+---
+
+## Las vistas
+
+### Públicas, sin cuenta
+
+| Vista | Qué hace |
+|---|---|
+| **Donar** (`/#/donate`) | Dirección y código QR de cada partido. El QR es un enlace EIP-681: le abre la billetera al donante ya cargada con el destinatario, la red y el contrato correctos. Muestra red, moneda aceptada y contrato del token |
+| **Ingreso** (`/#/login`) | Acceso institucional. Tres cuentas de demostración con sus roles |
+
+### Para el tribunal y los partidos
+
+| Vista | Qué hace | Quién la ve |
+|---|---|---|
+| **Resumen** | Totales, distribución por estado y actividad reciente | Todos |
+| **Donaciones** | Tabla completa: referencia, partido, monto, activo, país del donante, hash de atestación, estado y fecha. Filtros por estado y por activo, búsqueda por referencia, hash de transacción o dirección de origen | Todos |
+| **Detalle de donación** | Expediente de una donación: datos de cadena, atestación, veredicto con sus hallazgos, anclajes de evidencia y acción de devolución si existe | Todos |
+| **Centro de cumplimiento** | Solo lo que requiere atención: pendientes de atestación con su ventana de cura, y no conformes esperando devolución. Desde acá se evalúa y se ejecuta la devolución | Todos |
+| **Billeteras** | Direcciones de los partidos con saldo nativo y de token, leídos de la cadena | Todos |
+| **Rastro de auditoría** | Cada anclaje de evidencia: tipo, hash, raíz de Merkle y referencia de transacción, con enlace al explorador | Todos |
+| **Vista de auditoría pública** | Lo que un tercero puede verificar sin conocer a nadie: donaciones, estados y evidencia, sin dato personal alguno. Emite certificados de auditoría | Solo TSE |
+
+**Aislamiento por partido:** un tesorero de Alfa ve únicamente las donaciones de
+Alfa. El TSE ve todo. El alcance se resuelve en el servidor, no ocultando filas
+en el navegador.
+
+---
+
+## Correrlo
+
+Requiere **Node 22 o superior**. Sin base de datos y sin claves de API.
 
 ```bash
 git clone https://github.com/Velar-Bonds/Velar-Audit.git
@@ -65,319 +199,105 @@ cp .env.example .env
 npm run wallet:new
 ```
 
-Paste the printed phrase into `.env` as `WDK_SEED_PHRASE`. This step is not
-optional: every wallet-touching call refuses to run without it. Then:
+Pegá la frase impresa en `.env` como `WDK_SEED_PHRASE`. Este paso no es opcional:
+toda llamada que toque una billetera se niega a correr sin ella.
+
+Generá también una clave para firmar las sesiones:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Pegala como `SESSION_SECRET`. Después:
 
 ```bash
 npm start
 ```
 
-Open <http://localhost:3400>. Sign in with one of the demonstration accounts —
-the password for all three is `velar-demo-2026`:
+Abrí <http://localhost:3400>. La contraseña de las tres cuentas es
+`velar-demo-2026`:
 
-| Account | Role | Sees |
+| Cuenta | Rol | Ve |
 |---|---|---|
-| `tse@velar.cr` | Electoral tribunal | Every donation, across all parties |
-| `alfa@velar.cr` | Party treasurer | Only Partido Alfa's donations |
-| `beta@velar.cr` | Party treasurer | Only Partido Beta's donations |
+| `tse@velar.cr` | Tribunal electoral | Todas las donaciones, de todos los partidos |
+| `alfa@velar.cr` | Tesorero de partido | Solo las del Partido Alfa |
+| `beta@velar.cr` | Tesorero de partido | Solo las del Partido Beta |
 
-What you get is a fully working app with an empty ledger. Zero donations is the
-real empty state, not a stub: the sign-in screen, the party isolation, and the
-dashboard all run against the same code path that later shows live chain data.
-No testnet funds are required for this.
+Lo que obtenés es una aplicación funcionando con el libro vacío. Cero donaciones
+es el estado vacío real, no un placeholder: la pantalla de ingreso, el
+aislamiento por partido y el tablero corren contra el mismo código que después
+muestra datos de cadena en vivo. **Para esto no hacen falta fondos de testnet.**
 
-### Loading the demonstration scenario
+### Cargar el escenario de demostración
 
-Seeing donations that cover every compliance outcome — foreign donor, over-cap,
-KYC failure, and the rest — means sending real transactions on Sepolia. That
-needs a small amount of free testnet ETH and three commands.
+Ver donaciones que cubran todos los resultados de cumplimiento significa mandar
+transacciones reales en Sepolia. Eso necesita un poco de ETH de prueba gratis.
 
 ```bash
 npm run donor:new
 ```
 
-Paste the printed phrase into `.env` as `DONOR_SEED_PHRASE`. Fund that donor
-wallet with Sepolia ETH from a faucet (Google Cloud and Alchemy both hand it
-out). Then:
+Pegá la frase en `.env` como `DONOR_SEED_PHRASE` y fondeá esa billetera con ETH
+de Sepolia desde un faucet. Después:
 
 ```bash
-npm run provision
-npm run seed:chain
+npm run provision      # mintea USD₮ de prueba y da gas a los partidos
+npm run seed:chain     # manda las donaciones a la cadena
 ```
 
-`provision` mints test USDT via Aave's Sepolia faucet contract and tops up the
-party wallets with gas. `seed:chain` sends the donations on-chain. The indexer
-picks them up the same way it would pick up any other transfer — because they
-are ordinary transfers.
-
----
-
-## How a donation flows through the system
-
-### Where donations come from
-
-A donor sends **USDC** (or any ERC-20 the party accepts) from their own wallet
-directly to the party's public address. There is no payment page, no checkout, no
-intermediary: the party publishes its address, and the donor sends money to it
-the same way they would send it to any other wallet.
-
-This is deliberate. The moment a platform sits between the donor and the party,
-that platform becomes something the TSE has to trust — and something that could
-quietly reorder, delay, or hide a transaction. Here the blockchain is the
-intake channel, and the system's job is to *observe* it rather than to *operate*
-it.
-
-### 1 — Intake
-
-The party's donation wallet is built with **Tether's Wallet Development Kit
-(WDK)** and is fully self-custodial: the seed phrase belongs to the party, and no
-exchange or custodian holds the funds.
-
-An indexer reads ERC-20 `Transfer` logs straight from the chain and records every
-incoming transaction. **A donation cannot arrive without being recorded**, because
-the record is built from what the chain says, not from what the party reports.
-
-Each party gets its own account index derived from the same seed phrase, so a
-deployment with many parties needs one seed and many addresses — and donations to
-different parties are separated on-chain, not by a column in a database.
-
-### 2 — Evidence link
-
-A third-party KYC and source-of-funds provider issues an **attestation** for each
-donation. The system keeps two things:
-
-- a **pseudonymous donor reference**, stable across donations so contributions can
-  be totalled against the legal cap
-- the **SHA-256 hash** of the attestation payload
-
-The payload itself — the name, the identity document, the bank trail — never
-enters this system. Hashing uses canonical JSON with sorted keys, so the TSE can
-recompute a hash and get the same answer, which is what makes the evidence
-reproducible rather than merely stored.
-
-### 3 — Compliance
-
-A deterministic rules engine evaluates each donation against Costa Rican
-financing law and decides its status. A **QVAC agent then runs a language model
-on the machine itself** to turn that decision into a sentence an auditor can
-read.
-
-Running locally is not a performance choice. The agent reasons over KYC and
-source-of-funds data; sending that to a cloud API would hand a third party the
-donor list of every political party in the country.
-
-### 4 — Enforcement
-
-Non-compliant donations are flagged for return. When the return is executed, the
-refund transaction and the whole chain of events — attestation hash, verdict,
-return — are anchored on-chain with a hash, a timestamp, and a transaction
-reference.
-
-The party wallet is gated by a WDK **`returns-only` policy**: outbound transfers
-are denied unless the recipient is an address that has already donated to it. A
-treasurer trying to move donated funds somewhere they do not belong does not get
-a failed transaction — they never get a signature.
-
----
-
-## Two design decisions worth defending
-
-### The model writes, it does not judge
-
-`src/compliance/rules.ts` decides compliance status.
-`src/compliance/qvac-agent.ts` runs the local model to phrase that decision for a
-human reader. **The model is never asked whether something is legal.**
-
-A verdict that carries a legal consequence has to be reproducible by a regulator,
-and a sampled language model is not reproducible. There is also a practical
-reason: we tested it. A 1B model asked whether a foreign donation was legal
-answered *"foreign financing is illegal, but this donation is not illegal"* in a
-single sentence, and invented a statute requiring politically exposed persons to
-be "publicly exposed". Fabricated electoral law reaching a TSE auditor is a real
-harm, not a cosmetic defect.
-
-The agent therefore includes a guard that discards any explanation contradicting
-its own verdict, and falls back to the rule findings when that happens.
-
-### The wallet enforces the rule itself
-
-Compliance that lives only in an application is compliance that can be bypassed
-by anyone with database access. Pushing the return rule down into the wallet's
-policy engine means the constraint holds even against the party operating the
-software.
-
----
-
-## Compliance rules
-
-| Rule | Severity | Basis |
-|---|---|---|
-| `foreign_donor` | Violation | Foreign political financing is illegal in Costa Rica, Colombia, Brazil and Argentina |
-| `kyc_failed` | Violation | The provider could not verify the donor's identity |
-| `undisclosed_source` | Violation | Anonymous donations are not admissible |
-| `over_cap` | Violation | The donor exceeded the annual per-donor cap |
-| `attestation_tampered` | Violation | The attestation hash does not reproduce |
-| `no_attestation` | Warning → violation | Escalates when the cure window expires |
-| `pep_donor` | Warning | Politically exposed person — manual TSE review |
-
-> The foreign-financing prohibition is real law. **The numeric cap in
-> `.env.example` is a placeholder**, not a legal figure. Confirm it against the
-> Código Electoral before presenting it to the TSE as anything but an
-> illustration.
-
----
-
-## Who sees what
-
-| | TSE | Party |
-|---|---|---|
-| View donations | Every party | Only its own |
-| Return or re-assess | Any donation | Only its own |
-| Full evidence log | Yes | No |
-| Reload the demonstration data | Yes | No |
-
-Isolation between parties is **not a filter on a list**. Every action against a
-donation verifies ownership, and a party requesting another party's donation by
-id receives **404, not 403** — because knowing that the donation exists is itself
-information it is not entitled to.
-
-Passwords are stored with `scrypt` and a per-user salt. Session tokens are stored
-hashed, so a stolen database does not hand over live sessions. The login endpoint
-answers in constant time whether or not the account exists, so the form cannot be
-used to enumerate who works at the tribunal, and it locks out after eight failed
-attempts per address.
-
----
-
-## The interface
-
-Four views, with a top navigation bar carrying identity and session, and a
-sidebar carrying the sections:
-
-| View | What it shows |
-|---|---|
-| **Resumen** | Headline figures, seven-day activity, compliance breakdown, the six-step verification flow, and the most recent donations |
-| **Donaciones** | Filterable list with status tabs, search and pagination; each donation opens a five-step traceability timeline |
-| **Cumplimiento** | Analysis agent status, a queue of donations needing attention ordered by risk, and a review panel |
-| **Billeteras** | Balances per party with their derivation index, and the evidence-without-exposure diagram |
-
-The interface is in Spanish, because the people who will use it are Costa Rican
-electoral officials and party treasurers.
-
-### Design basis
-
-The visual language follows the UK
-[Government Project Delivery design system](https://projectdelivery.gov.uk/get-involved/connect-and-contribute/publishing-content-on-the-government-project-delivery-website/design-system/),
-which extends the GOV.UK Design System, combined with the density a data
-dashboard needs. What was adopted is its accessibility discipline:
-
-- The **yellow focus indicator** with a black underline — one of the
-  best-tested accessibility patterns in existence, and one that does not rely on
-  colour to be visible. It is the only rule in the stylesheet marked
-  `!important`, so no component state can ever hide it.
-- **Status tags in uppercase**, where the meaning is carried by the text rather
-  than the colour, for anyone who cannot tell two reds from two greens.
-- **Plain language** throughout: short sentences, full dates, no unexplained
-  abbreviations.
-
-What was *not* adopted is the identity: no crown, no GOV.UK wordmark, no British
-government imagery. Citing an open design system is legitimate; appearing to be
-another country's government service would not be.
-
-### Nothing loads from a CDN
-
-No part of the interface fetches anything from a third party at runtime. During a
-hackathon the venue wifi is the adversary, and a dashboard that depends on
-`fonts.googleapis.com` can show up blank in front of the judges.
-
-- **Barlow, self-hosted** in `web/fonts/`. It is the typeface Project Delivery
-  uses and it is Open Font Licence. GDS Transport, the GOV.UK typeface, is
-  licensed **only for use on gov.uk services**, so it was never an option.
-- **Charts drawn by hand in SVG** (`web/charts.js`, about 120 lines) instead of a
-  charting library that would have brought React and a build step.
-- **No icon library.** The design system is text-first.
-
-### The interface does not invent numbers
-
-Every figure on the dashboard comes from real donations that went through the
-pipeline. Each donation shows **which engine assessed it** and **how many rules
-were applied** — not a model confidence score, because no such number exists in
-this system and fabricating one would be exactly the figure a judge asks to
-verify.
-
----
-
-## Going live
+Para una donación suelta, con el monto y el partido que quieras:
 
 ```bash
-npm run qvac:pull     # download the model weights before you need them
+npm run donate -- alfa 1500
 ```
 
-`WDK_TOKEN_ADDRESS` is the only thing that changes between USDC, USDT, and
-mainnet — the WDK code path is identical for any ERC-20. The party wallet
-address is printed at startup and shown in the interface.
-
-### Running QVAC on macOS
-
-QVAC's native addon links against Homebrew's OpenSSL 3 at an absolute path.
-Without it the worker cannot start, and the system falls back cleanly to the
-rules engine — the interface reports this per row.
+### El modelo local
 
 ```bash
-brew install openssl@3
+npm run qvac:pull
 ```
 
-The default model is `QWEN3_4B_INST_Q4_K_M` (about 2.4 GB). Do not drop to the
-1B model to save the download: it reliably inverted the verdict it was asked to
-restate, writing *"foreign donor (US), not rejected"* for a non-compliant
-donation.
+Descarga los pesos una sola vez. El modelo se configura con `QVAC_MODEL` en
+`.env`.
+
+Cuando el modelo no está disponible, `assess()` devuelve los hallazgos del motor
+de reglas sin frase explicativa. El estado de cumplimiento es idéntico: lo decide
+el motor determinista, no el modelo.
 
 ---
 
-## Project layout
+## Dos decisiones de diseño que vale la pena defender
 
-```
-src/
-  types.ts                       canonical data model
-  store.ts                       audit store
-  pipeline.ts                    intake → evidence → compliance → enforcement
-  wallet/wdk.ts                  WDK party wallets + returns-only policy
-  wallet/indexer.ts              ERC-20 Transfer log indexer
-  attestation/hash.ts            canonical JSON + SHA-256
-  attestation/stub-provider.ts   stand-in for a KYC provider
-  compliance/rules.ts            deterministic rules — the authority
-  compliance/qvac-agent.ts       local model — explanation only
-  evidence/anchor.ts             hash + timestamp + transaction reference
-  auth/                          scrypt passwords, hashed sessions, role gates
-  seed.ts                        parties and demonstration accounts
-  demo.ts                        demonstration scenario and 14 days of history
-  server.ts                      HTTP API
-web/
-  index.html                     shell
-  app.js                         router, views and state
-  app.css                        design system
-  charts.js                      SVG charts
-  fonts/                         Barlow, self-hosted
-```
+### El modelo escribe, no juzga
 
-## Commands
+`src/compliance/rules.ts` decide el estado de cumplimiento.
+`src/compliance/qvac-agent.ts` corre el modelo local para redactar esa decisión.
 
-| Command | What it does |
-|---|---|
-| `npm start` | Run the server |
-| `npm run dev` | Run with reload on change |
-| `npm run typecheck` | `tsc --noEmit` |
-| `npm run qvac:pull` | Download the QVAC model weights |
-| `npm run wallet:new` | Generate a party wallet seed phrase |
-| `npm run donor:new` | Generate a donor wallet seed phrase |
-| `npm run provision` | Mint test USDT and fund party wallets with gas |
-| `npm run seed:chain` | Send real Sepolia donations covering every compliance outcome |
-| `npm run faucet:usdt` | Mint test USDT from Aave's Sepolia faucet |
+No es una limitación por conveniencia. Un veredicto de cumplimiento tiene
+consecuencias legales y un regulador tiene que poder reproducirlo; un modelo de
+lenguaje no es reproducible. Además, un modelo chico al que se le pregunta si una
+donación extranjera es legal **inventa estatutos** — lo medimos, y ley electoral
+fabricada llegando a un auditor del TSE es un daño real, no cosmético.
+
+Por eso el modelo nunca ve una pregunta que pueda responder mal, y por eso el
+sistema entero sigue funcionando sin él.
+
+Cuando el modelo contradice al motor de reglas, la contradicción no se descarta
+en silencio: levanta un hallazgo de revisión manual. El modelo puede pedir que
+mire un humano; **nunca puede absolver**, porque un hallazgo de violación pesa
+más que cualquier advertencia.
+
+### Una sola cadena, siempre real
+
+No hay modo simulado. El producto afirma que la evidencia es verificable en un
+libro público, y un camino de código que finge esa afirmación es un camino que se
+puede demostrar por accidente.
+
+La red es Sepolia y el activo es USD₮ de prueba. Las transacciones son reales,
+los anclajes son reales, y cualquiera puede abrirlos en el explorador.
 
 ---
 
-<div align="center">
+## Licencia
 
-MIT · [LICENSE](LICENSE)
-
-</div>
+MIT.
