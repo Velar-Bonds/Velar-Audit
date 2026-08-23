@@ -6,5 +6,10 @@
       "destination": "/api"
     }
   ],
-  "installCommand": "npm install --omit=optional --omit=dev"
+  "installCommand": "npm install --omit=optional --omit=dev",
+  "functions": {
+    "api/index.ts": {
+      "includeFiles": "node_modules/**/prebuilds/linux-x64/**"
+    }
+  }
 }

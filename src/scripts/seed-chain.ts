@@ -43,6 +43,21 @@ async function surveyDonors(count: number) {
   return donors
 }
 
+async function waitForConfirmation(hash: string, timeoutMs = 60_000): Promise<void> {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    const res = await fetch(config.wdk.rpcUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getTransactionReceipt', params: [hash] }),
+    })
+    const body = (await res.json()) as { result?: { status: string } | null }
+    if (body.result) return
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+  }
+  throw new Error(`transaction ${hash} did not confirm within ${timeoutMs}ms`)
+}
+
 async function main() {
   await seedIdentity()
   const parties = store.parties()
@@ -112,6 +127,7 @@ async function main() {
     const balance: bigint = await donor.account.getBalance()
     if (balance < GAS_PER_DONOR / 2n) {
       const gas = await funder.account.sendTransaction({ to: donor.address, value: GAS_PER_DONOR })
+      await waitForConfirmation(gas.hash)
       console.log(`  gas  → ${donor.address}  ${gas.hash}`)
     }
 
@@ -121,6 +137,7 @@ async function main() {
       const top = await funder.account.transfer({
         token: config.wdk.token.address, recipient: donor.address, amount: needed - held,
       })
+      await waitForConfirmation(top.hash)
       console.log(`  ${config.wdk.token.symbol} → ${donor.address}  ${top.hash}`)
     }
   }
