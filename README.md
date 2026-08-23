@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="web/logo-readme.jpg" alt="AUDI — Transparencia que se puede verificar" width="480">
+<img src="web/logo-readme.jpg" alt="AUDIT — Transparency you can verify" width="480">
 
 **Donation auditability for political financing**
 
@@ -22,10 +22,10 @@ provider.
 
 ---
 
-## What AUDI is
+## What AUDIT is
 
 A supervision instrument for political donations. A party publishes its wallet
-address, a donor sends money straight to it, and AUDI **watches the chain** and
+address, a donor sends money straight to it, and AUDIT **watches the chain** and
 builds the record: who received how much, when, backed by what identity
 evidence, and whether the donation complies with the law.
 
@@ -64,10 +64,10 @@ request from the institution that would use it.
 with the bond-certificate lifecycle at its centre, designed for several Latin
 American jurisdictions.
 
-**AUDI** is a separate product built on the same principle. It takes VELAR's
+**AUDIT** is a separate product built on the same principle. It takes VELAR's
 evidence model — sensitive data off the chain, proof on it — and applies it to a
 different problem: the financing of political parties. The bond lifecycle is not
-part of AUDI.
+part of AUDIT.
 
 They share an architecture and a standard of proof. They share neither scope nor
 database.

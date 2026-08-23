@@ -177,7 +177,6 @@ a:hover { color: var(--brand-dark); text-decoration: underline; }
  * squeezing the magnifier down to a smudge.
  */
 .brand-logo { display: block; height: 40px; width: auto; }
-.brand-logo.lg { height: 46px; margin-bottom: var(--sp-3); }
 
 /*
  * Section navigation, sitting directly under the identity bar.
@@ -716,15 +715,6 @@ tbody tr:hover { background: var(--brand-050); }
   padding: var(--sp-8); position: relative; overflow: hidden;
 }
 @media (max-width: 900px) { .auth-art { display: none; } }
-/*
- * The wordmark in the supplied logo is navy, which is this panel's own
- * background colour — on the navy it read as a blank space with a blue A
- * floating beside it. The plaque keeps the artwork exactly as supplied rather
- * than recolouring someone else's mark to suit our backdrop.
- */
-.auth-art .brand-logo {
-  background: #fff; padding: 10px 16px; border-radius: var(--radius-md);
-}
 .auth-art .brand-sub { color: #93AECD; font-size: 12.5px; }
 .auth-art .pitch { max-width: 34ch; }
 .auth-art .pitch h2 { font-size: 26px; line-height: 34px; font-weight: 600; letter-spacing: -.02em; }
